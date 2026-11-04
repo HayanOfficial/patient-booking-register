@@ -1,0 +1,11 @@
+# Vercel Ignore File
+.git
+.next
+node_modules
+old-software
+reference
+scripts
+.env.local
+.env.*.local
+*.tsbuildinfo
+

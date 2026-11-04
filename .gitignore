@@ -49,3 +49,5 @@ next-env.d.ts
 old-software/dist/
 old-software/dist-electron/
 old-software/release/
+
+.vercel

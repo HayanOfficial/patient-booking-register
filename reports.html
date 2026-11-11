@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports &amp; Analytics — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="app-layout">
+
+  <!-- Header -->
+  <header class="page-header">
+    <div class="header-brand">
+      <div class="header-title" id="hdr-clinic-name">Patient Booking Register</div>
+      <div class="header-subtitle">Executive Reports &amp; Clinical Analytics</div>
+    </div>
+    <div class="header-right">
+      <a href="./booking.html" class="today-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+        &larr; Back to Booking Sheet
+      </a>
+      <span class="header-date" id="hdr-today-date"></span>
+      <div class="dropdown">
+        <button class="btn btn--ghost btn--sm" id="user-menu-btn" style="color:var(--white);">
+          👤 <span id="hdr-username">User</span> ▾
+        </button>
+        <div class="dropdown-menu" id="user-menu">
+          <a href="./settings.html" class="dropdown-item">⚙️ Settings</a>
+          <a href="./users.html" class="dropdown-item">👥 User Management</a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
+          <button class="dropdown-item dropdown-item--danger" id="logout-btn">🚪 Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Filter Bar -->
+  <div class="report-filter-bar">
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label text-xs">Start Date</label>
+      <input type="date" class="date-input" id="rep-start-date" />
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label text-xs">End Date</label>
+      <input type="date" class="date-input" id="rep-end-date" />
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label text-xs">Doctor</label>
+      <select class="form-select" id="rep-doctor-select" style="min-width:180px;">
+        <option value="">All Doctors</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label text-xs">Source</label>
+      <select class="form-select" id="rep-source-select" style="min-width:140px;">
+        <option value="">All Sources</option>
+      </select>
+    </div>
+    <button class="btn btn--primary" id="rep-filter-btn" style="height:34px;">
+      🔍 Run Report
+    </button>
+    <button class="btn btn--secondary" id="rep-export-btn" style="height:34px;margin-left:auto;">
+      📥 Export Excel (.xlsx)
+    </button>
+  </div>
+
+  <!-- 8 Report Tabs -->
+  <div class="report-tabs">
+    <button class="report-tab-btn active" data-report="overview">1. Overview Dashboard</button>
+    <button class="report-tab-btn" data-report="source">2. Sources &amp; Conversion</button>
+    <button class="report-tab-btn" data-report="trends">3. Booking Trends</button>
+    <button class="report-tab-btn" data-report="peak">4. Peak Hours &amp; Heatmap</button>
+    <button class="report-tab-btn" data-report="staff">5. Staff Performance</button>
+    <button class="report-tab-btn" data-report="doctor-shift">6. Doctor &amp; Shift</button>
+    <button class="report-tab-btn" data-report="tokens">7. Tokens &amp; Reprints</button>
+    <button class="report-tab-btn" data-report="followup">8. Absent &amp; Follow-Up</button>
+  </div>
+
+  <!-- Main Report Panels -->
+  <main class="main-content" style="background:var(--white);">
+
+    <!-- 1. Overview -->
+    <div class="report-panel active" id="rep-panel-overview">
+      <div class="summary-grid" id="overview-metrics"></div>
+      <div class="card" style="margin-top:20px;">
+        <div class="card-header"><span class="card-title">Daily Trendline</span></div>
+        <div class="card-body"><canvas id="overview-chart" height="240"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 2. Source -->
+    <div class="report-panel" id="rep-panel-source">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Bookings by Source &amp; Conversion Rates</span></div>
+        <div class="card-body">
+          <table class="booking-table" id="source-table">
+            <thead>
+              <tr><th>Source</th><th>Count</th><th>% Share</th><th>Checked In</th><th>Completed</th><th>Absent</th><th>Conversion Rate</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Trends -->
+    <div class="report-panel" id="rep-panel-trends">
+      <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;">
+        <label class="form-label text-xs">Group By:</label>
+        <select class="form-select" id="trend-group-by" style="width:140px;">
+          <option value="day">Daily</option>
+          <option value="week">Weekly</option>
+          <option value="month">Monthly</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Volume Trends (Appointments vs Walk-ins)</span></div>
+        <div class="card-body"><canvas id="trends-chart" height="240"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 4. Peak Hours -->
+    <div class="report-panel" id="rep-panel-peak">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Hourly Booking Distribution</span></div>
+          <div class="card-body"><canvas id="peak-hourly-chart" height="220"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Day of Week Distribution</span></div>
+          <div class="card-body"><canvas id="peak-weekday-chart" height="220"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Staff Performance -->
+    <div class="report-panel" id="rep-panel-staff">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Operator &amp; Front-Desk Staff Output</span></div>
+        <div class="card-body">
+          <table class="booking-table" id="staff-table">
+            <thead>
+              <tr><th>Staff Member</th><th>Role</th><th>Total Created</th><th>Appointments</th><th>Walk-ins</th><th>Attended</th><th>Absent</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Doctor & Shift -->
+    <div class="report-panel" id="rep-panel-doctor-shift">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Doctor &amp; Shift Slot Utilisation</span></div>
+        <div class="card-body">
+          <table class="booking-table" id="doctor-shift-table">
+            <thead>
+              <tr><th>Doctor</th><th>Shift</th><th>Duration</th><th>Total Booked</th><th>Appointments</th><th>Walk-ins</th><th>Completed</th><th>Absent</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Tokens -->
+    <div class="report-panel" id="rep-panel-tokens">
+      <div class="summary-grid" id="tokens-metrics"></div>
+      <div class="card" style="margin-top:20px;">
+        <div class="card-header"><span class="card-title">Daily Token Allocation &amp; Reprints</span></div>
+        <div class="card-body">
+          <table class="booking-table" id="tokens-table">
+            <thead>
+              <tr><th>Date</th><th>Total Tokens</th><th>Appointment (A)</th><th>Walk-in (W)</th><th>Reprints</th><th>Cancelled</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. Follow-up & Absent -->
+    <div class="report-panel" id="rep-panel-followup">
+      <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;">
+        <label class="form-label text-xs">Filter Type:</label>
+        <select class="form-select" id="fu-filter-type" style="width:160px;">
+          <option value="all">All (Absent &amp; Follow-up)</option>
+          <option value="absent">Absent Only</option>
+          <option value="follow_up">Follow-up Only</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Patient Contact &amp; Care Coordination List</span></div>
+        <div class="card-body">
+          <table class="booking-table" id="followup-table">
+            <thead>
+              <tr><th>Date</th><th>Token</th><th>Patient MRN</th><th>Patient Name</th><th>Phone</th><th>City</th><th>Doctor</th><th>Status</th><th>Purpose</th><th>Remarks</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module" src="./js/reports.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking Register — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="app-layout">
+
+  <!-- Page Header -->
+  <header class="page-header">
+    <div class="header-brand">
+      <div class="header-title" id="hdr-clinic-name">Patient Booking Register</div>
+      <div class="header-subtitle">Real-time schedule and patient coordination center</div>
+    </div>
+    <div class="header-right">
+      <span id="realtime-indicator" class="realtime-indicator realtime-indicator--connected">● Live</span>
+      <span class="header-date" id="hdr-today-date">2026-09-29</span>
+      <a href="./display.html" target="_blank" class="today-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+        📺 Dashboard View
+      </a>
+      <div class="dropdown">
+        <button class="btn btn--ghost btn--sm" id="user-menu-btn" style="color:var(--white);">
+          👤 <span id="hdr-username">User</span> ▾
+        </button>
+        <div class="dropdown-menu" id="user-menu">
+          <div class="dropdown-item text-muted text-xs" id="hdr-role-label">Role: Operator</div>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
+          <a href="./reports.html" class="dropdown-item">📊 Reports &amp; Analytics</a>
+          <a href="./settings.html" class="dropdown-item" id="menu-settings-link">⚙️ Clinic Settings</a>
+          <a href="./users.html" class="dropdown-item" id="menu-users-link">👥 User Management</a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
+          <button class="dropdown-item dropdown-item--danger" id="logout-btn">🚪 Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Top Tabs -->
+  <nav class="top-tabs" role="tablist">
+    <button class="tab-btn active" data-tab="booking-sheet" role="tab">📋 Booking Sheet</button>
+    <button class="tab-btn" data-tab="booking-analytics" role="tab">📊 Booking Analytics</button>
+    <button class="tab-btn" data-tab="waiting-list" role="tab">⏳ Waiting List</button>
+    <button class="tab-btn" data-tab="booking-graph" role="tab">📈 Booking Graph</button>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- ========== TAB: Booking Sheet ========== -->
+    <div class="tab-panel active" id="tab-booking-sheet">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="nav-date-group">
+          <span style="font-size:.78rem;font-weight:600;color:#6b7280;">Navigate Date</span>
+          <button class="nav-btn" id="prev-date-btn" title="Previous day">‹</button>
+          <input type="date" class="date-input" id="booking-date-input" />
+          <button class="nav-btn" id="next-date-btn" title="Next day">›</button>
+          <button class="today-btn" id="today-btn">Today</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:320px;">
+          <div style="display:flex;flex-direction:column;">
+            <label style="font-size:.7rem;font-weight:600;color:#6b7280;">Select Doctor &amp; Shift</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select class="doctor-shift-select" id="doctor-shift-select"></select>
+              <button class="today-btn" id="update-register-btn" title="Reload data">🔄 Update Register</button>
+            </div>
+          </div>
+          <div class="doctor-display" id="doctor-display">
+            <div class="doctor-avatar" id="doctor-avatar">👨‍⚕️</div>
+            <div>
+              <div class="doctor-name" id="doctor-name-display">Dr Naeem Khattak</div>
+              <div class="doctor-spec" id="doctor-spec-display">Consultant Eye Surgeon</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <span style="font-size:.8rem;font-weight:600;color:#6b7280;">🗓 Schedule</span>
+          <button class="nav-btn" id="schedule-prev">‹</button>
+          <button class="today-btn" id="schedule-today">Today</button>
+          <button class="nav-btn" id="schedule-next">›</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="text" class="search-input" id="patient-search-filter" placeholder="🔍 Quick find patient, phone or MRN…" />
+          <button class="action-btn" title="Clear cancelled" id="clear-cancelled-btn">🗑</button>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stat-cards-wrapper">
+        <div class="stat-cards" id="stat-cards">
+          <div class="stat-card" style="min-width:80px;align-items:center;justify-content:center;">
+            <span class="spinner"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Booking Table -->
+      <div class="booking-table-wrapper">
+        <table class="booking-table">
+          <thead>
+            <tr>
+              <th style="width:50px;">SR#</th>
+              <th style="width:110px;">TIME</th>
+              <th>PATIENT IDENTIFICATION</th>
+              <th style="width:120px;">SOURCE</th>
+              <th style="width:130px;">PURPOSE</th>
+              <th style="width:130px;">APPOINTMENT</th>
+              <th style="width:160px;">VISIT INFO</th>
+              <th style="width:170px;">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="booking-tbody">
+            <tr class="loading-row"><td colspan="8"><span class="spinner"></span> Loading slots &amp; bookings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ========== TAB: Booking Analytics ========== -->
+    <div class="tab-panel" id="tab-booking-analytics">
+      <div style="padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="font-size:1.2rem;font-weight:700;">Performance &amp; Utilisation Overview</h2>
+          <a href="./reports.html" class="btn btn--primary btn--sm">View All 8 Reports &rarr;</a>
+        </div>
+        <div class="summary-grid" id="analytics-summary"></div>
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><span class="card-title">Daily Bookings Trend (Last 30 Days)</span></div>
+          <div class="card-body"><canvas id="analytics-chart" height="240"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== TAB: Waiting List ========== -->
+    <div class="tab-panel" id="tab-waiting-list">
+      <div style="padding:16px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <h3 style="font-size:1.1rem;font-weight:700;">Shift Waiting List</h3>
+            <p class="text-muted text-xs">Patients queued for overflow or cancelled slots</p>
+          </div>
+          <button class="btn btn--primary btn--sm" id="add-waiting-btn">+ Add to Waiting List</button>
+        </div>
+        <div class="card">
+          <table class="booking-table waiting-table">
+            <thead>
+              <tr>
+                <th style="width:40px;">#</th>
+                <th>Patient Name</th>
+                <th>Phone</th>
+                <th>Purpose</th>
+                <th>Source</th>
+                <th>Notes</th>
+                <th>Added Time</th>
+                <th style="width:140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="waiting-tbody">
+              <tr class="empty-row"><td colspan="8">No patients on waiting list for this date.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== TAB: Booking Graph ========== -->
+    <div class="tab-panel" id="tab-booking-graph">
+      <div style="padding:20px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">📊 Bookings by Source (Today)</span></div>
+            <div class="card-body" style="display:flex;align-items:center;gap:20px;">
+              <div style="width:200px;height:200px;"><canvas id="source-chart"></canvas></div>
+              <div id="source-legend" style="display:flex;flex-direction:column;gap:6px;flex:1;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">📈 Status Breakdown (Today)</span></div>
+            <div class="card-body"><canvas id="status-chart" height="180"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========== Quick Book Modal ========== -->
+  <div class="modal-overlay" id="quick-book-modal">
+    <div class="modal" style="max-width:700px;">
+      <div class="qb-header">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:.85rem;font-weight:700;letter-spacing:.05em;color:#78350f;">📅 QUICK BOOK</div>
+          <button class="modal-close" id="qb-close">✕</button>
+        </div>
+        <div class="qb-time" id="qb-time">8:00 a.m.</div>
+        <div class="qb-chips" id="qb-chips">
+          <span class="qb-chip">👤 Dr Naeem Khattak</span>
+          <span class="qb-chip">🥞 Default Shift</span>
+          <span class="qb-chip" id="qb-clinic-chip">🏢 Clinic</span>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Search / Manual Unknown Toggle -->
+        <div class="search-toggle">
+          <button id="toggle-search-btn" class="active">🔍 Search Patient</button>
+          <button id="toggle-manual-btn">👤 Manual / Unknown</button>
+        </div>
+
+        <!-- Patient search section -->
+        <div id="search-section">
+          <div class="form-group" style="position:relative;">
+            <input class="form-input" type="text" id="patient-search-input" placeholder="Search by name, phone, MRN or CNIC…" autocomplete="off" />
+            <div class="patient-results" id="patient-search-results" style="display:none;"></div>
+          </div>
+          <div id="selected-patient-banner" class="hidden" style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <span style="font-weight:700;color:#065f46;" id="sel-pat-name">Patient Name</span>
+              <span style="color:#047857;font-size:.78rem;margin-left:8px;" id="sel-pat-info">Phone / MRN</span>
+            </div>
+            <button class="btn btn--ghost btn--sm" id="clear-patient-btn" style="color:#065f46;">✕ Clear</button>
+          </div>
+        </div>
+
+        <!-- Appointment fields -->
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Purpose of Visit <span class="required">*</span></label>
+            <select class="form-select" id="qb-purpose"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reservation Type <span class="required">*</span></label>
+            <select class="form-select" id="qb-reservation-type">
+              <option value="Appointment">Appointment</option>
+              <option value="Walk-in">Walk-in</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Source of appointment <span class="required">*</span></label>
+            <select class="form-select" id="qb-source"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Called as <span class="required">*</span></label>
+            <select class="form-select" id="qb-called-as"></select>
+          </div>
+        </div>
+
+        <!-- Patient Info -->
+        <div id="patient-fields">
+          <div class="form-row form-row--2">
+            <div class="form-group">
+              <label class="form-label">First name <span class="required">*</span></label>
+              <input class="form-input" type="text" id="qb-first-name" placeholder="First name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Last name</label>
+              <input class="form-input" type="text" id="qb-last-name" placeholder="Last name" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CNIC <span class="text-muted">(optional)</span></label>
+            <input class="form-input" type="text" id="qb-cnic" placeholder="13 digit CNIC e.g. 38403848654" maxlength="13" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <div style="display:flex;gap:6px;">
+              <select class="form-select" id="qb-phone-code" style="width:160px;">
+                <option value="+92">Pakistan (+92)</option>
+                <option value="+93">Afghanistan (+93)</option>
+                <option value="+1">USA (+1)</option>
+              </select>
+              <select class="form-select" id="qb-phone-prefix" style="width:90px;">
+                <option>300</option><option>301</option><option>302</option><option>303</option>
+                <option>304</option><option>305</option><option>306</option><option>307</option>
+                <option>308</option><option>309</option><option>310</option><option>311</option>
+                <option>312</option><option>313</option><option>314</option><option>315</option>
+                <option>316</option><option>317</option><option>318</option><option>319</option>
+                <option>320</option><option>321</option><option>330</option><option>333</option>
+                <option>334</option><option>340</option><option>345</option><option>346</option>
+              </select>
+              <input class="form-input" type="text" id="qb-phone-number" placeholder="1234567" maxlength="7" style="flex:1;" />
+            </div>
+            <span class="form-hint">7 digits</span>
+          </div>
+          <div class="form-row form-row--2">
+            <div class="form-group">
+              <label class="form-label">City</label>
+              <select class="form-select" id="qb-city"><option value="">— Select City —</option></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Area</label>
+              <select class="form-select" id="qb-area"><option value="">— Select Area —</option></select>
+            </div>
+          </div>
+          <div class="form-row form-row--2">
+            <div class="form-group">
+              <label class="form-label">Address</label>
+              <input class="form-input" type="text" id="qb-address" placeholder="House / Street" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Age</label>
+              <input class="form-input" type="number" id="qb-age" placeholder="e.g. 35" min="0" max="130" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Remarks</label>
+          <textarea class="form-textarea" id="qb-remarks" placeholder="Any notes or remarks…"></textarea>
+        </div>
+        <div id="qb-error" class="form-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" id="qb-cancel-btn">Cancel</button>
+        <button class="btn btn--primary" id="qb-confirm-btn">✓ Confirm Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Booking Modal -->
+  <div class="modal-overlay" id="edit-booking-modal">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <div class="modal-title">✏️ Edit Booking Details</div>
+        <button class="modal-close" id="edit-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Purpose</label>
+            <select class="form-select" id="edit-purpose"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Source</label>
+            <select class="form-select" id="edit-source"></select>
+          </div>
+        </div>
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Reservation Type</label>
+            <select class="form-select" id="edit-reservation-type">
+              <option value="Appointment">Appointment</option>
+              <option value="Walk-in">Walk-in</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Called As</label>
+            <select class="form-select" id="edit-called-as"></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Remarks</label>
+          <textarea class="form-textarea" id="edit-remarks"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" id="edit-cancel-btn">Cancel</button>
+        <button class="btn btn--primary" id="edit-save-btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Patient History Modal -->
+  <div class="modal-overlay" id="history-modal">
+    <div class="modal" style="max-width:760px;">
+      <div class="modal-header">
+        <div class="modal-title">📋 Patient Booking History</div>
+        <button class="modal-close" id="history-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="history-patient-info" style="margin-bottom:14px;padding:12px;background:#f9fafb;border-radius:8px;"></div>
+        <table class="booking-table history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Token</th>
+              <th>Time</th>
+              <th>Doctor</th>
+              <th>Purpose</th>
+              <th>Source</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer"><button class="btn btn--secondary" id="history-close-btn">Close</button></div>
+    </div>
+  </div>
+
+  <!-- Waiting List Add Modal -->
+  <div class="modal-overlay" id="waiting-add-modal">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <div class="modal-title">⏳ Add Patient to Waiting List</div>
+        <button class="modal-close" id="waiting-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Patient Name <span class="required">*</span></label>
+            <input class="form-input" type="text" id="wl-name" placeholder="Full name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone <span class="required">*</span></label>
+            <input class="form-input" type="text" id="wl-phone" placeholder="+923001234567" />
+          </div>
+        </div>
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Purpose</label>
+            <select class="form-select" id="wl-purpose"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Source</label>
+            <select class="form-select" id="wl-source"></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="wl-notes" placeholder="Reason for waiting list…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" id="wl-cancel-btn">Cancel</button>
+        <button class="btn btn--primary" id="wl-confirm-btn">Add to Waiting List</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/booking.js"></script>
+</body>
+</html>
+

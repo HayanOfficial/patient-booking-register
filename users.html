@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Management — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="app-layout">
+
+  <!-- Header -->
+  <header class="page-header">
+    <div class="header-brand">
+      <div class="header-title" id="hdr-clinic-name">Patient Booking Register</div>
+      <div class="header-subtitle">Staff User Accounts &amp; Access Control</div>
+    </div>
+    <div class="header-right">
+      <a href="./booking.html" class="today-btn" style="text-decoration:none;">&larr; Booking Sheet</a>
+      <div class="dropdown">
+        <button class="btn btn--ghost btn--sm" id="user-menu-btn" style="color:var(--white);">
+          👤 <span id="hdr-username">Admin</span> ▾
+        </button>
+        <div class="dropdown-menu" id="user-menu">
+          <a href="./settings.html" class="dropdown-item">⚙️ Settings</a>
+          <a href="./reports.html" class="dropdown-item">📊 Reports</a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
+          <button class="dropdown-item dropdown-item--danger" id="logout-btn">🚪 Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content" style="max-width:1100px;margin:20px auto;width:100%;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <h1 style="font-size:1.3rem;font-weight:700;">System Staff Users</h1>
+        <p class="text-muted text-xs">Manage receptionists, operators, and administrators with role-based permissions.</p>
+      </div>
+      <button class="btn btn--primary" id="add-user-btn">+ Create New Staff User</button>
+    </div>
+
+    <div class="card">
+      <table class="booking-table" id="users-table">
+        <thead>
+          <tr>
+            <th>Full Name</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Password Reset Req.</th>
+            <th style="width:160px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr class="loading-row"><td colspan="7"><span class="spinner"></span> Loading users...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Modal: Create / Edit User -->
+  <div class="modal-overlay" id="user-modal">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <div class="modal-title" id="user-modal-title">Create Staff User</div>
+        <button class="modal-close" onclick="document.getElementById('user-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="u-id" />
+        <div class="form-group">
+          <label class="form-label">Full Name <span class="required">*</span></label>
+          <input class="form-input" type="text" id="u-fullname" placeholder="Full name e.g. Sara Ahmed" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username <span class="required">*</span></label>
+          <input class="form-input" type="text" id="u-username" placeholder="Unique username" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role <span class="required">*</span></label>
+          <select class="form-select" id="u-role">
+            <option value="operator">Operator (Bookings &amp; Inquiries)</option>
+            <option value="receptionist">Receptionist (Check-In &amp; Tokens)</option>
+            <option value="admin">Administrator (Full Control)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" type="email" id="u-email" placeholder="staff@clinic.com" />
+        </div>
+        <div class="form-group" id="pwd-field-group">
+          <label class="form-label">Temporary Password <span class="required">*</span></label>
+          <input class="form-input" type="password" id="u-password" placeholder="At least 6 characters" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="u-status">
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+        <div id="u-error" class="form-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="document.getElementById('user-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn--primary" id="save-user-btn">Save User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Reset Password -->
+  <div class="modal-overlay" id="reset-modal">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <div class="modal-title">Reset Staff Password</div>
+        <button class="modal-close" onclick="document.getElementById('reset-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="reset-uid" />
+        <p class="text-muted text-sm" style="margin-bottom:12px;" id="reset-user-text"></p>
+        <div class="form-group">
+          <label class="form-label">New Password <span class="required">*</span></label>
+          <input class="form-input" type="password" id="reset-new-pwd" placeholder="Minimum 6 characters" />
+        </div>
+        <div id="reset-error" class="form-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="document.getElementById('reset-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn--primary" id="confirm-reset-btn">Reset Password</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/users.js"></script>
+</body>
+</html>
+

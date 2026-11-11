@@ -1,0 +1,6 @@
+/* Print stylesheet for token printing */
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; padding: 0; background: white; }
+  .no-print, header, nav, .page-header, .top-tabs, .toolbar, .stat-cards-wrapper, .booking-table-wrapper { display: none !important; }
+}

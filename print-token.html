@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token Print — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="./css/print.css" />
+</head>
+<body style="background:#f3f4f6; display:flex; align-items:center; justify-content:center; min-height:100vh;">
+  <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+    <div class="token-print-wrap" id="token-wrap">
+      <div class="token-print-clinic">
+        <h2 id="pt-clinic">Bariatric Surgery Clinic</h2>
+        <p id="pt-addr">Patient Booking Register</p>
+      </div>
+      <div class="token-print-token">
+        <div class="token-type" id="pt-type">APPOINTMENT</div>
+        <div class="big-token" id="pt-code">A-001</div>
+        <div id="pt-date" style="font-size:.8rem;color:#6b7280;"></div>
+      </div>
+      <div class="token-print-info">
+        <table>
+          <tr><td>Patient:</td><td id="pt-name">—</td></tr>
+          <tr><td>MRN:</td><td id="pt-mrn">—</td></tr>
+          <tr><td>Phone:</td><td id="pt-phone">—</td></tr>
+          <tr><td>Doctor:</td><td id="pt-doctor">—</td></tr>
+          <tr><td>Shift:</td><td id="pt-shift">—</td></tr>
+          <tr><td>Time:</td><td id="pt-time">—</td></tr>
+          <tr><td>Purpose:</td><td id="pt-purpose">—</td></tr>
+        </table>
+      </div>
+      <div style="text-align:center;margin-top:14px;font-size:.7rem;color:#9ca3af;">
+        Please arrive 10 minutes before your slot time. Thank you!
+      </div>
+    </div>
+    <div class="no-print" style="display:flex;gap:10px;">
+      <button class="btn btn--primary" onclick="window.print()">🖨️ Print Slip</button>
+      <button class="btn btn--secondary" onclick="window.close()">Close Window</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api } from './js/api.js';
+
+    // Load clinic info
+    api.getClinicInfo().then(info => {
+      if (info?.name) document.getElementById('pt-clinic').textContent = info.name;
+      if (info?.address) document.getElementById('pt-addr').textContent = info.address;
+    });
+
+    try {
+      const raw = sessionStorage.getItem('print_token_data');
+      if (raw) {
+        const b = JSON.parse(raw);
+        const p = b.patient || {};
+        document.getElementById('pt-code').textContent = b.token_code || '—';
+        document.getElementById('pt-type').textContent = (b.reservation_type || 'APPOINTMENT').toUpperCase();
+        document.getElementById('pt-date').textContent = b.booking_date || '';
+        document.getElementById('pt-name').textContent = [p.first_name, p.last_name].filter(Boolean).join(' ') || '—';
+        document.getElementById('pt-mrn').textContent = p.patient_mrn || '—';
+        document.getElementById('pt-phone').textContent = p.full_phone || '—';
+        document.getElementById('pt-doctor').textContent = b.doctor_name || '—';
+        document.getElementById('pt-shift').textContent = b.shift_name || '—';
+        document.getElementById('pt-time').textContent = b.slot_time_formatted || b.slot_time || '—';
+        document.getElementById('pt-purpose').textContent = b.purpose || '—';
+
+        setTimeout(() => window.print(), 500);
+      }
+    } catch (e) {
+      console.warn('Print data parse error:', e);
+    }
+  </script>
+</body>
+</html>
+

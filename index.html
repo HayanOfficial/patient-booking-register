@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-brand-name" id="clinic-name">Bariatric Surgery Clinic</div>
+        <div class="login-brand-sub">Patient Booking Register — HIMS Front Desk</div>
+      </div>
+      <div class="login-form">
+        <h2>Sign in to your account</h2>
+        <div id="login-error" class="login-error hidden"></div>
+        <form id="login-form" autocomplete="off">
+          <div class="form-group">
+            <label class="form-label" for="username">Username or Email</label>
+            <input class="form-input" type="text" id="username" name="username" placeholder="Enter your username" autocomplete="username" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-input" type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required />
+          </div>
+          <button type="submit" class="btn btn--primary btn--full btn--lg" id="login-btn">
+            Sign In
+          </button>
+        </form>
+      </div>
+      <div class="login-footer">
+        Patient Booking Register &copy; 2026. All rights reserved.
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password Modal (shown when must_change_password is true) -->
+  <div class="modal-overlay" id="change-pwd-modal">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <div class="modal-title">🔐 Change Password Required</div>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted" style="margin-bottom:16px">Your account requires a password change before you can continue.</p>
+        <div class="form-group">
+          <label class="form-label">New Password <span class="required">*</span></label>
+          <input class="form-input" type="password" id="new-pwd" placeholder="Minimum 6 characters" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password <span class="required">*</span></label>
+          <input class="form-input" type="password" id="confirm-pwd" placeholder="Repeat new password" />
+        </div>
+        <div id="pwd-error" class="form-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--primary" id="change-pwd-btn">Change Password & Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { authenticateUser, saveSession, redirectIfLoggedIn, changePassword } from './js/auth.js';
+    import { api } from './js/api.js';
+
+    redirectIfLoggedIn();
+
+    // Load clinic name
+    api.getClinicInfo().then(info => {
+      if (info?.name) document.getElementById('clinic-name').textContent = info.name;
+    }).catch(() => {});
+
+    let _pendingUser = null;
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const errorEl = document.getElementById('login-error');
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      errorEl.classList.add('hidden');
+
+      try {
+        const result = await authenticateUser(username, password);
+        if (result.success) {
+          if (result.user.must_change_password) {
+            _pendingUser = result.user;
+            document.getElementById('change-pwd-modal').classList.add('open');
+          } else {
+            saveSession(result.user);
+            window.location.href = './booking.html';
+          }
+        } else {
+          errorEl.textContent = result.error || 'Login failed. Please try again.';
+          errorEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+
+    document.getElementById('change-pwd-btn').addEventListener('click', async () => {
+      const np = document.getElementById('new-pwd').value;
+      const cp = document.getElementById('confirm-pwd').value;
+      const errEl = document.getElementById('pwd-error');
+      errEl.classList.add('hidden');
+      if (np.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.classList.remove('hidden'); return; }
+      if (np !== cp) { errEl.textContent = 'Passwords do not match.'; errEl.classList.remove('hidden'); return; }
+      await changePassword(_pendingUser.id, np);
+      _pendingUser.must_change_password = false;
+      saveSession(_pendingUser);
+      window.location.href = './booking.html';
+    });
+  </script>
+</body>
+</html>
+

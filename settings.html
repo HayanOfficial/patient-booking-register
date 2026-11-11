@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="app-layout">
+
+  <!-- Header -->
+  <header class="page-header">
+    <div class="header-brand">
+      <div class="header-title" id="hdr-clinic-name">Patient Booking Register</div>
+      <div class="header-subtitle">System Settings &amp; Clinical Configuration</div>
+    </div>
+    <div class="header-right">
+      <a href="./booking.html" class="today-btn" style="text-decoration:none;">&larr; Booking Sheet</a>
+      <div class="dropdown">
+        <button class="btn btn--ghost btn--sm" id="user-menu-btn" style="color:var(--white);">
+          👤 <span id="hdr-username">Admin</span> ▾
+        </button>
+        <div class="dropdown-menu" id="user-menu">
+          <a href="./users.html" class="dropdown-item">👥 User Management</a>
+          <a href="./reports.html" class="dropdown-item">📊 Reports</a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
+          <button class="dropdown-item dropdown-item--danger" id="logout-btn">🚪 Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="settings-layout">
+    <!-- Sidebar navigation -->
+    <aside class="settings-sidebar">
+      <button class="settings-nav-btn active" data-tab="clinic">🏥 Clinic Profile</button>
+      <button class="settings-nav-btn" data-tab="doctors">👨‍⚕️ Doctors</button>
+      <button class="settings-nav-btn" data-tab="shifts">⏰ Shifts &amp; Timing</button>
+      <button class="settings-nav-btn" data-tab="lookups">🏷️ Lookups &amp; Dropdowns</button>
+      <button class="settings-nav-btn" data-tab="audit">📜 System Audit Log</button>
+    </aside>
+
+    <!-- Panels -->
+    <main class="main-content">
+
+      <!-- 1. Clinic Profile -->
+      <div class="settings-panel active" id="panel-clinic">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Clinic Organization Profile</span></div>
+          <div class="card-body">
+            <form id="clinic-form">
+              <div class="form-row form-row--2">
+                <div class="form-group">
+                  <label class="form-label">Clinic Name <span class="required">*</span></label>
+                  <input class="form-input" type="text" id="cfg-name" required />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tagline / Subtitle</label>
+                  <input class="form-input" type="text" id="cfg-tagline" />
+                </div>
+              </div>
+              <div class="form-row form-row--2">
+                <div class="form-group">
+                  <label class="form-label">Primary Phone</label>
+                  <input class="form-input" type="text" id="cfg-phone" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Emergency Phone</label>
+                  <input class="form-input" type="text" id="cfg-emergency" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Clinic Address</label>
+                <input class="form-input" type="text" id="cfg-address" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Official Website</label>
+                <input class="form-input" type="text" id="cfg-website" />
+              </div>
+              <button type="submit" class="btn btn--primary" id="save-clinic-btn">Save Clinic Profile</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Doctors -->
+      <div class="settings-panel" id="panel-doctors">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h2 style="font-size:1.1rem;font-weight:700;">Consulting Doctors</h2>
+          <button class="btn btn--primary btn--sm" id="add-doctor-btn">+ Add Doctor</button>
+        </div>
+        <div class="card">
+          <table class="booking-table" id="doctors-table">
+            <thead>
+              <tr><th>Doctor Name</th><th>Specialty</th><th>Phone</th><th>Status</th><th style="width:120px;">Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 3. Shifts -->
+      <div class="settings-panel" id="panel-shifts">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h2 style="font-size:1.1rem;font-weight:700;">Doctor Clinic Shifts</h2>
+          <button class="btn btn--primary btn--sm" id="add-shift-btn">+ Add Shift</button>
+        </div>
+        <div class="card">
+          <table class="booking-table" id="shifts-table">
+            <thead>
+              <tr><th>Shift Name</th><th>Doctor</th><th>Start Time</th><th>End Time</th><th>Slot Duration</th><th>Status</th><th style="width:120px;">Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. Lookups -->
+      <div class="settings-panel" id="panel-lookups">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <h2 style="font-size:1.1rem;font-weight:700;">Lookup Items</h2>
+            <select class="form-select" id="lookup-cat-select" style="width:160px;">
+              <option value="source">Sources</option>
+              <option value="purpose">Purposes</option>
+              <option value="called_as">Called As</option>
+              <option value="city">Cities</option>
+              <option value="area">Areas</option>
+            </select>
+          </div>
+          <button class="btn btn--primary btn--sm" id="add-lookup-btn">+ Add Item</button>
+        </div>
+        <div class="card">
+          <table class="booking-table" id="lookups-table">
+            <thead>
+              <tr><th>Item Name</th><th>Category</th><th>Order</th><th>Status</th><th style="width:120px;">Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. Audit -->
+      <div class="settings-panel" id="panel-audit">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h2 style="font-size:1.1rem;font-weight:700;">Security &amp; Operational Audit Trail</h2>
+          <button class="btn btn--secondary btn--sm" id="refresh-audit-btn">🔄 Refresh</button>
+        </div>
+        <div class="card">
+          <table class="booking-table" id="audit-table">
+            <thead>
+              <tr><th>Timestamp</th><th>User</th><th>Role</th><th>Action</th><th>Target</th><th>Details</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Modal: Doctor Add/Edit -->
+  <div class="modal-overlay" id="doctor-modal">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-header">
+        <div class="modal-title" id="doctor-modal-title">Doctor Details</div>
+        <button class="modal-close" onclick="document.getElementById('doctor-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="doc-id" />
+        <div class="form-group">
+          <label class="form-label">Doctor Name <span class="required">*</span></label>
+          <input class="form-input" type="text" id="doc-name" placeholder="Dr Full Name" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Specialty <span class="required">*</span></label>
+          <input class="form-input" type="text" id="doc-specialty" placeholder="e.g. Consultant Surgeon" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact Phone</label>
+          <input class="form-input" type="text" id="doc-phone" placeholder="+923001234567" />
+        </div>
+        <div class="form-group" style="flex-direction:row;align-items:center;gap:8px;">
+          <input type="checkbox" id="doc-active" checked />
+          <label class="form-label" for="doc-active" style="margin-bottom:0;">Active for scheduling</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="document.getElementById('doctor-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn--primary" id="save-doctor-btn">Save Doctor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Shift Add/Edit -->
+  <div class="modal-overlay" id="shift-modal">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <div class="modal-title" id="shift-modal-title">Shift Details</div>
+        <button class="modal-close" onclick="document.getElementById('shift-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="shf-id" />
+        <div class="form-group">
+          <label class="form-label">Doctor <span class="required">*</span></label>
+          <select class="form-select" id="shf-doctor"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shift Name <span class="required">*</span></label>
+          <input class="form-input" type="text" id="shf-name" placeholder="e.g. Morning Shift" required />
+        </div>
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Start Time (24h) <span class="required">*</span></label>
+            <input class="form-input" type="time" id="shf-start" value="08:00" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">End Time (24h) <span class="required">*</span></label>
+            <input class="form-input" type="time" id="shf-end" value="22:00" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Slot Duration (Minutes) <span class="required">*</span></label>
+          <input class="form-input" type="number" id="shf-duration" value="9" min="1" max="120" required />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="document.getElementById('shift-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn--primary" id="save-shift-btn">Save Shift</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Lookup Add/Edit -->
+  <div class="modal-overlay" id="lookup-modal">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <div class="modal-title">Lookup Item</div>
+        <button class="modal-close" onclick="document.getElementById('lookup-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="lkp-id" />
+        <div class="form-group">
+          <label class="form-label">Item Name <span class="required">*</span></label>
+          <input class="form-input" type="text" id="lkp-name" placeholder="Name" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color / Badge</label>
+          <input class="form-input" type="color" id="lkp-color" value="#3B82F6" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="document.getElementById('lookup-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn--primary" id="save-lookup-btn">Save Item</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/settings.js"></script>
+</body>
+</html>
+

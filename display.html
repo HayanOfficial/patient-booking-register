@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token Display Board — Patient Booking Register</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="display-page">
+
+  <!-- Header -->
+  <header class="display-header">
+    <div>
+      <div class="display-clinic-name" id="disp-clinic-name">Bariatric Surgery Clinic</div>
+      <div style="color:#94a3b8;font-size:1rem;margin-top:2px;" id="disp-doc-shift">Now Serving — Patient Queue</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:20px;">
+      <span id="realtime-indicator" class="realtime-indicator realtime-indicator--connected" style="font-size:.85rem;padding:4px 12px;">● Live Queue</span>
+      <div class="display-clock" id="disp-clock">12:00:00 PM</div>
+    </div>
+  </header>
+
+  <!-- Main Display -->
+  <main style="padding:24px;">
+    <div class="token-board">
+      <div class="token-card" style="border: 2px solid var(--amber);">
+        <div class="tc-label" style="color:var(--amber);">⚡ NOW CALLING / IN PROCESS</div>
+        <div class="tc-token" id="calling-token">—</div>
+        <div class="tc-name" id="calling-name">Awaiting Patient</div>
+        <div id="calling-info" style="color:#94a3b8;font-size:.9rem;margin-top:8px;"></div>
+      </div>
+
+      <div class="token-card" style="border: 2px solid #10b981;">
+        <div class="tc-label" style="color:#10b981;">✅ NEXT IN QUEUE (CHECKED IN)</div>
+        <div class="tc-token" id="next-token" style="color:#10b981;">—</div>
+        <div class="tc-name" id="next-name">No checked-in patients</div>
+        <div id="next-info" style="color:#94a3b8;font-size:.9rem;margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <!-- Waiting queue numbers -->
+    <div class="waiting-scroll" style="margin-top:24px;">
+      <h3 style="color:#94a3b8;font-size:1rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">
+        ⏳ Waiting in Lobby (Tokens)
+      </h3>
+      <div class="waiting-items" id="waiting-grid">
+        <div class="waiting-item" style="color:#64748b;">No queue</div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="./js/display.js"></script>
+</body>
+</html>
+

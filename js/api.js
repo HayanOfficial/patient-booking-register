@@ -21,13 +21,13 @@ function broadcastEvent(type, payload) {
 // Default / seed data (local fallback)
 // ---------------------------------------------------------------------------
 const DEFAULT_DOCTORS = [
-  { id: 'd1111111-1111-1111-1111-111111111111', name: 'Dr Naeem Khattak',   specialty: 'Consultant Eye Surgeon & Retina Specialist', phone: '+923005901111', is_active: true, sort_order: 1 },
-  { id: 'd2222222-2222-2222-2222-222222222222', name: 'Dr Zarin Khan',       specialty: 'Consultant Physician & Internal Medicine',   phone: '+923005902222', is_active: true, sort_order: 2 },
+  { id: 'd1111111-1111-1111-1111-111111111111', name: 'Dr Naeem Khattak',   specialty: 'Consultant Bariatric & Laparoscopic Surgeon', phone: '+923005901111', is_active: true, sort_order: 1 },
+  { id: 'd2222222-2222-2222-2222-222222222222', name: 'Dr Zarin Khan',       specialty: 'Consultant Laparoscopic & General Surgeon',   phone: '+923005902222', is_active: true, sort_order: 2 },
 ];
 
 const DEFAULT_SHIFTS = [
-  { id: 's1111111-1111-1111-1111-111111111111', doctor_id: 'd1111111-1111-1111-1111-111111111111', name: 'Default Shift', start_time: '08:00', end_time: '22:00', slot_duration_minutes: 9, days_of_week: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'], is_active: true, sort_order: 1 },
-  { id: 's2222222-2222-2222-2222-222222222222', doctor_id: 'd1111111-1111-1111-1111-111111111111', name: 'Morning Shift', start_time: '09:00', end_time: '14:00', slot_duration_minutes: 10, is_active: true, sort_order: 2 },
+  { id: 'e1111111-1111-1111-1111-111111111111', doctor_id: 'd1111111-1111-1111-1111-111111111111', name: 'Default Shift', start_time: '08:00', end_time: '22:00', slot_duration_minutes: 9, days_of_week: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'], is_active: true, sort_order: 1 },
+  { id: 'e2222222-2222-2222-2222-222222222222', doctor_id: 'd1111111-1111-1111-1111-111111111111', name: 'Morning Shift', start_time: '09:00', end_time: '14:00', slot_duration_minutes: 10, is_active: true, sort_order: 2 },
 ];
 
 const DEFAULT_LOOKUPS = [
@@ -130,7 +130,7 @@ function generateSeedBookings() {
         id: `b-${dateStr}-${si}`,
         booking_date: dateStr,
         doctor_id: 'd1111111-1111-1111-1111-111111111111',
-        shift_id:  's1111111-1111-1111-1111-111111111111',
+        shift_id:  'e1111111-1111-1111-1111-111111111111',
         patient_id: pId,
         slot_index: si,
         slot_time: slotTime,

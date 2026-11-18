@@ -88,13 +88,22 @@ async function init() {
     }
   });
 
-  // Select Doctor Modal controls
+  // =========================================================
+  // SELECT DOCTOR MODAL — matching /reference/booking.png
+  // =========================================================
   $('select-doctor-close').addEventListener('click', () => closeModal('select-doctor-modal'));
   $('select-doctor-close-btn').addEventListener('click', () => closeModal('select-doctor-modal'));
+
+  // "View Today's Booking" button — goes straight to first doctor's check-in
   $('btn-view-today-modal').addEventListener('click', () => {
     closeModal('select-doctor-modal');
-    if (activeDoctors.length > 0) openDoctorCheckin(activeDoctors[0].id);
+    if (activeDoctors.length > 0) {
+      openDoctorCheckin(activeDoctors[0].id);
+    } else {
+      showToast('No active doctors found.', 'info');
+    }
   });
+
   $('modal-quick-doctor-search').addEventListener('input', e => filterDoctorCards(e.target.value));
   $('modal-find-patient-btn').addEventListener('click', () => {
     const q = $('modal-find-patient-input').value.trim();
@@ -108,7 +117,9 @@ async function init() {
     if (e.key === 'Enter') $('modal-find-patient-btn').click();
   });
 
-  // Doctor Check-in List controls
+  // =========================================================
+  // DOCTOR CHECK-IN MODAL — matching /reference/booking checkin.png
+  // =========================================================
   $('doctor-checkin-close').addEventListener('click', () => closeModal('doctor-checkin-modal'));
   $('doctor-checkin-close-btn').addEventListener('click', () => closeModal('doctor-checkin-modal'));
   $('btn-back-to-doctors').addEventListener('click', () => {
@@ -187,14 +198,14 @@ function renderWorkloadGrid(workloads) {
     return;
   }
   grid.innerHTML = workloads.map(w => `
-    <div class="workload-card" data-doctor-id="${w.id}">
+    <div class="workload-card" data-doctor-id="${w.id}" style="cursor:pointer;" title="Click to open check-in desk">
       <div class="workload-top">
         <span class="workload-doctor-name">${w.name}</span>
         <span class="workload-badge-total">${w.total_bookings}</span>
       </div>
       <div class="workload-stats-row">
-        <span class="workload-pill-open">O: ${w.pending_count}</span>
-        <span class="workload-pill-done">D: ${w.checked_in_count}</span>
+        <span class="workload-pill-open">⏳ Pending: ${w.pending_count}</span>
+        <span class="workload-pill-done">✓ Done: ${w.checked_in_count}</span>
       </div>
       <div class="workload-time-footer">
         🕒 ${w.last_updated}
@@ -209,32 +220,33 @@ function renderWorkloadGrid(workloads) {
   });
 }
 
+// =========================================================
+// SELECT DOCTOR MODAL — doctor cards (reference/booking.png)
+// =========================================================
 function renderSelectDoctorCards(workloads) {
   const container = $('modal-doctor-cards');
   if (!workloads || workloads.length === 0) {
-    container.innerHTML = '<div style="color:#64748b;">No doctors available.</div>';
+    container.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">No active doctors found for today.</div>';
     return;
   }
-  container.innerHTML = workloads.map(w => {
-    const shift = allShifts.find(s => s.doctor_id === w.id);
-    return `
-      <div class="doctor-select-card" data-doc-card-id="${w.id}">
-        <div class="doctor-select-card-top">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:1.3rem;">👨‍⚕️</span>
-            <div>
-              <strong style="color:#0f172a;font-size:.95rem;">${w.name}</strong>
-            </div>
+
+  container.innerHTML = workloads.map(w => `
+    <div class="doctor-select-card" data-doc-card-id="${w.id}" style="cursor:pointer;">
+      <div class="doctor-select-card-top">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:38px;height:38px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">👨‍⚕️</div>
+          <div>
+            <div style="font-weight:700;color:#0f172a;font-size:.95rem;">${w.name}</div>
           </div>
-          <span class="doctor-select-badge">${w.total_bookings}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.78rem;">
-          <span style="color:#475569;">📅 ${w.total_bookings} bookings today</span>
-          <span style="color:#2563eb;background:#eff6ff;padding:2px 8px;border-radius:9999px;font-weight:700;">🕒 Active Now</span>
-        </div>
+        <span class="doctor-select-badge">${w.total_bookings}</span>
       </div>
-    `;
-  }).join('');
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.8rem;">
+        <span style="color:#475569;">📅 ${w.total_bookings} bookings today &nbsp;·&nbsp; ⏳ ${w.pending_count} pending</span>
+        <span style="color:#2563eb;background:#eff6ff;padding:2px 10px;border-radius:9999px;font-weight:700;font-size:.75rem;">🟢 Active Now</span>
+      </div>
+    </div>
+  `).join('');
 
   container.querySelectorAll('.doctor-select-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -248,53 +260,101 @@ function filterDoctorCards(query) {
   const q = query.toLowerCase().trim();
   document.querySelectorAll('.doctor-select-card').forEach(card => {
     const match = card.textContent.toLowerCase().includes(q);
-    card.style.display = match ? 'block' : 'none';
+    card.style.display = match ? '' : 'none';
   });
 }
 
 // --- Select Doctor & Check-in Desk Modals ---
 function openSelectDoctorModal() {
-  $('select-doctor-modal').classList.add('open');
-  $('modal-quick-doctor-search').value = '';
-  $('modal-find-patient-input').value = '';
-  filterDoctorCards('');
+  // Always refresh data when opening
+  loadWorkloadData().then(() => {
+    $('select-doctor-modal').classList.add('open');
+    $('modal-quick-doctor-search').value = '';
+    $('modal-find-patient-input').value = '';
+    filterDoctorCards('');
+  });
 }
 
+// =========================================================
+// DOCTOR CHECK-IN MODAL — (reference/booking checkin.png)
+// =========================================================
 async function openDoctorCheckin(doctorId) {
   selectedDoctorId = doctorId;
   const doc = activeDoctors.find(d => d.id === doctorId);
+  currentSubTab = 'pending'; // always start on Pending tab
+
+  // Update modal header
   $('checkin-doc-name').textContent = doc ? doc.name : 'Doctor';
+  $('checkin-date').textContent = currentDate;
   $('checkin-patient-search').value = '';
+
+  // Reset tab UI
+  $('tab-checkin-pending').classList.add('active');
+  $('tab-checkin-checked').classList.remove('active');
+
   $('doctor-checkin-modal').classList.add('open');
+
+  // Show spinner while loading
+  const tbody = $('checkin-bookings-table').querySelector('tbody');
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="text-align:center;padding:28px;">⏳ Loading bookings...</td></tr>`;
 
   await loadDoctorCheckinData();
 }
 
 async function loadDoctorCheckinData() {
   if (!selectedDoctorId) return;
-  activeBookings = await api.getReceptionBookings(selectedDoctorId, currentDate, currentSubTab);
 
-  // Update tab badges
-  const allForDoc = await api.getBookingsForShiftAndDate(currentDate, selectedDoctorId, allShifts.find(s => s.doctor_id === selectedDoctorId)?.id || '');
-  const pendingCount = allForDoc.filter(b => b.status === 'pending').length;
-  const checkedCount = allForDoc.filter(b => b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed').length;
-  $('badge-pending-count').textContent = pendingCount;
-  $('badge-checked-count').textContent = checkedCount;
+  try {
+    // Load all bookings for this doctor today (for tab badge counts)
+    const allForDoc = await api.getReceptionBookings(selectedDoctorId, currentDate, 'all');
+    const pendingBookings = allForDoc.filter(b => b.status === 'pending');
+    const checkedInBookings = allForDoc.filter(b =>
+      b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed'
+    );
 
-  renderCheckinTable(activeBookings);
+    $('badge-pending-count').textContent = pendingBookings.length;
+    $('badge-checked-count').textContent = checkedInBookings.length;
+
+    // Show the right set
+    if (currentSubTab === 'pending') {
+      activeBookings = pendingBookings.sort((a, b) => (a.slot_index || 0) - (b.slot_index || 0));
+    } else {
+      activeBookings = checkedInBookings.sort((a, b) => (a.token_number || 9999) - (b.token_number || 9999));
+    }
+
+    renderCheckinTable(activeBookings);
+  } catch (err) {
+    console.error('loadDoctorCheckinData error:', err);
+    const tbody = $('checkin-bookings-table').querySelector('tbody');
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="color:#ef4444;">Failed to load: ${err.message}</td></tr>`;
+  }
 }
 
 function switchCheckinSubTab(tab) {
   currentSubTab = tab;
   $('tab-checkin-pending').classList.toggle('active', tab === 'pending');
   $('tab-checkin-checked').classList.toggle('active', tab === 'checked_in');
+  $('checkin-patient-search').value = '';
   loadDoctorCheckinData();
 }
 
+// =========================================================
+// TABLE RENDER — matching /reference/booking checkin.png
+// =========================================================
 function renderCheckinTable(bookings) {
   const tbody = $('checkin-bookings-table').querySelector('tbody');
+
   if (!bookings || bookings.length === 0) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No ${currentSubTab === 'pending' ? 'pending' : 'checked-in'} appointments for today.</td></tr>`;
+    const emptyMsg = currentSubTab === 'pending'
+      ? 'No pending appointments for today.'
+      : 'No checked-in patients yet.';
+    tbody.innerHTML = `
+      <tr class="empty-row">
+        <td colspan="7" style="text-align:center;padding:32px;">
+          <div style="color:#64748b;font-size:.9rem;margin-bottom:12px;">${emptyMsg}</div>
+          ${currentSubTab === 'pending' ? `<button class="btn btn--primary btn--sm" onclick="document.getElementById('btn-add-walkin').click();document.getElementById('doctor-checkin-modal').classList.remove('open');">➕ Add Walk-in Patient</button>` : ''}
+        </td>
+      </tr>`;
     return;
   }
 
@@ -304,82 +364,115 @@ function renderCheckinTable(bookings) {
     const timeFormatted = b.slot_time_formatted || b.slot_time || '—';
 
     let actionCell = '';
-    if (b.status === 'pending') {
-      actionCell = `<button class="btn-checkin-action" data-checkin-id="${b.id}">➔ Check-in</button>`;
+
+    if (currentSubTab === 'pending') {
+      // Blue "➜ Check-in" button — token is assigned on click
+      actionCell = `
+        <button class="btn-checkin-blue" data-checkin-id="${b.id}">
+          ➜ Check-in
+        </button>`;
     } else {
+      // Already checked-in: show token badge + undo
+      const tokenDisplay = b.token_number && b.token_number > 0
+        ? `Token #${b.token_number}`
+        : (b.token_code && b.token_code !== 'Pending' ? b.token_code : '—');
+
       const counselBadge = b.counseling_status === 'waiting'
-        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--waiting">⏳ Waiting for Counseling</span></div>'
+        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--waiting">⏳ Counseling</span></div>'
         : b.counseling_status === 'in_counseling'
-        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--in_counseling">💬 In Counseling</span></div>'
+        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--in_counseling">💬 In Session</span></div>'
         : b.counseling_status === 'done'
-        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--done">✅ Counseling Done</span></div>'
+        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--done">✅ Done</span></div>'
         : '';
 
       actionCell = `
-        <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
-          <span style="font-weight:800;color:#1e3a8a;background:#dbeafe;padding:2px 8px;border-radius:4px;font-size:.85rem;">Token #${b.token_number || b.token_code}</span>
-          <button class="btn btn--secondary btn--sm" data-undo-id="${b.id}" title="Undo check-in (voids token)">↩</button>
-        </div>
-        <div style="font-size:.7rem;color:#059669;margin-top:2px;text-align:center;">In: ${formatTimestamp(b.checked_in_at || b.check_in_time)}</div>
-        ${counselBadge}
-      `;
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span style="font-weight:800;color:#1e3a8a;background:#dbeafe;padding:2px 10px;border-radius:4px;font-size:.85rem;">${tokenDisplay}</span>
+            <button class="btn btn--secondary btn--sm" data-undo-id="${b.id}" title="Undo check-in">↩</button>
+          </div>
+          <div style="font-size:.7rem;color:#059669;">In: ${formatTimestamp(b.checked_in_at || b.check_in_time)}</div>
+          ${counselBadge}
+        </div>`;
     }
+
+    // Source badge styling
+    const src = b.source || 'Direct';
+    const srcColors = {
+      'Self': '#4f46e5', 'Tiktok': '#000', 'Facebook': '#1877f2',
+      'Google': '#ea4335', 'WhatsApp': '#25d366', 'Direct': '#64748b'
+    };
+    const srcColor = srcColors[src] || '#475569';
 
     return `
       <tr data-booking-row="${b.id}">
         <td><strong>${b.slot_index || idx + 1}</strong></td>
         <td><span class="slot-time-pill">${timeFormatted}</span></td>
         <td>
-          <div style="font-weight:700;color:#0f172a;">${patientName}</div>
-          <div style="font-size:.75rem;color:#64748b;display:flex;gap:8px;margin-top:2px;">
-            <span>📞 ${p.full_phone || '—'}</span>
-            ${p.patient_mrn ? `<span>🆔 ${p.patient_mrn}</span>` : ''}
+          <div style="font-weight:700;color:#0f172a;font-size:.9rem;">${patientName}</div>
+          <div style="font-size:.75rem;color:#64748b;margin-top:2px;">
+            📞 ${p.full_phone || '—'}
+            ${p.patient_mrn ? `&nbsp;·&nbsp; 🆔 ${p.patient_mrn}` : ''}
           </div>
         </td>
-        <td><span class="badge badge--blue">${b.source || 'Direct'}</span></td>
-        <td><span class="badge ${b.reservation_type === 'Walk-in' ? 'badge--amber' : 'badge--teal'}">${b.reservation_type || 'Appointment'}</span></td>
-        <td><span class="badge badge--gray">${b.purpose || 'Consultation'}</span></td>
+        <td>
+          <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.75rem;font-weight:600;background:#f1f5f9;color:${srcColor};">
+            🏷️ ${src}
+          </span>
+        </td>
+        <td>
+          <span class="badge ${b.reservation_type === 'Walk-in' ? 'badge--amber' : 'badge--teal'}">
+            ${b.reservation_type || 'Appointment'}
+          </span>
+        </td>
+        <td>
+          <span class="badge badge--gray">${b.purpose || 'Consultation'}</span>
+        </td>
         <td style="text-align:center;">${actionCell}</td>
       </tr>
     `;
   }).join('');
 
-  // Attach Check-in button listeners
+  // ---- Check-in button handlers ----
   tbody.querySelectorAll('[data-checkin-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const bId = btn.dataset.checkinId;
       btn.disabled = true;
       btn.textContent = 'Checking in...';
+      btn.style.opacity = '0.7';
       try {
         const res = await api.checkinBooking(bId);
-        showToast(`✅ Patient Checked In! Token #${res.token_number} assigned.`, 'success');
+        const tokenNum = res.token_number;
+        showToast(`✅ Checked In! Token #${tokenNum} assigned.`, 'success');
+
+        // Refresh table & workload
         await loadDoctorCheckinData();
         await loadWorkloadData();
 
-        // Auto print token slip
-        const booking = bookings.find(x => x.id === bId) || res.booking;
-        printTokenSlip(booking, res.token_number);
+        // Auto-print token slip
+        const booking = activeBookings.find(x => x.id === bId) || res.booking || {};
+        printTokenSlip({ ...booking, token_number: tokenNum }, tokenNum);
       } catch (err) {
         showToast('Check-in failed: ' + err.message, 'error');
         btn.disabled = false;
-        btn.textContent = '➔ Check-in';
+        btn.textContent = '➜ Check-in';
+        btn.style.opacity = '';
       }
     });
   });
 
-  // Attach Undo button listeners
+  // ---- Undo button handlers ----
   tbody.querySelectorAll('[data-undo-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const bId = btn.dataset.undoId;
-      if (confirmDialog('Undo check-in for this patient? Token number will remain voided.')) {
-        try {
-          await api.undoCheckinBooking(bId);
-          showToast('Check-in undone. Status set back to pending.', 'info');
-          await loadDoctorCheckinData();
-          await loadWorkloadData();
-        } catch (err) {
-          showToast('Undo failed: ' + err.message, 'error');
-        }
+      if (!confirmDialog('Undo check-in? The token number will be voided and not reused.')) return;
+      try {
+        await api.undoCheckinBooking(bId);
+        showToast('Check-in undone. Status set back to pending.', 'info');
+        await loadDoctorCheckinData();
+        await loadWorkloadData();
+      } catch (err) {
+        showToast('Undo failed: ' + err.message, 'error');
       }
     });
   });
@@ -389,12 +482,14 @@ function filterCheckinTable(query) {
   const q = query.toLowerCase().trim();
   const rows = document.querySelectorAll('#checkin-bookings-table tbody tr');
   rows.forEach(tr => {
+    if (tr.classList.contains('empty-row')) return;
     const text = tr.textContent.toLowerCase();
     tr.style.display = text.includes(q) ? '' : 'none';
   });
 }
 
 function printTokenSlip(booking, tokenNum) {
+  if (!tokenNum || tokenNum <= 0) return; // don't print for placeholder tokens
   sessionStorage.setItem('print_token_data', JSON.stringify({
     ...booking,
     token_number: tokenNum,
@@ -437,9 +532,12 @@ async function performSearch() {
         <td><span class="badge ${b.reservation_type === 'Walk-in' ? 'badge--amber' : 'badge--teal'}">${b.reservation_type}</span></td>
         <td><span class="badge badge--gray">${b.purpose}</span></td>
         <td><span class="status-pill ${getStatusClass(b.status)}">${getStatusLabel(b.status)}</span></td>
-        <td>${b.token_number ? `<strong style="color:#1d4ed8;">Token #${b.token_number}</strong>` : '<span style="color:#94a3b8;">None</span>'}</td>
+        <td>${b.token_number && b.token_number > 0 ? `<strong style="color:#1d4ed8;">Token #${b.token_number}</strong>` : '<span style="color:#94a3b8;">—</span>'}</td>
         <td>
-          ${isPending ? `<button class="btn-checkin-action" data-search-checkin-id="${b.id}">➔ Check-in</button>` : `<span style="font-size:.78rem;color:#059669;">Checked In</span>`}
+          ${isPending
+            ? `<button class="btn-checkin-blue btn-checkin-blue--sm" data-search-checkin-id="${b.id}">➜ Check-in</button>`
+            : `<span style="font-size:.78rem;color:#059669;font-weight:600;">✓ Checked In</span>`
+          }
         </td>
       </tr>
     `;
@@ -449,6 +547,7 @@ async function performSearch() {
     btn.addEventListener('click', async () => {
       const bId = btn.dataset.searchCheckinId;
       btn.disabled = true;
+      btn.textContent = 'Checking in...';
       try {
         const res = await api.checkinBooking(bId);
         showToast(`✅ Patient Checked In! Token #${res.token_number} issued.`, 'success');
@@ -458,6 +557,7 @@ async function performSearch() {
       } catch (err) {
         showToast('Check-in failed: ' + err.message, 'error');
         btn.disabled = false;
+        btn.textContent = '➜ Check-in';
       }
     });
   });
@@ -470,7 +570,6 @@ function clearSearch() {
 }
 
 function filterMainDashboard(type) {
-  // Pending or Postponed toggle filter
   $('reception-search-input').value = type === 'pending' ? 'pending' : 'postponed';
   performSearch();
 }
@@ -497,7 +596,7 @@ function openQuickBookModal(resType = 'Appointment') {
   $('qb-source').innerHTML = lookups.source.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
 
   $('quick-book-modal').classList.add('open');
-  $('qb-first-name').focus();
+  setTimeout(() => $('qb-first-name').focus(), 100);
 }
 
 function onQuickBookDoctorChange() {
@@ -509,7 +608,7 @@ function onQuickBookDoctorChange() {
   const doc = activeDoctors.find(d => d.id === docId);
   const resType = $('qb-res-type').value;
   $('qb-chips').innerHTML = `
-    <span class="qb-chip">👤 ${doc?.name || 'Doctor'}</span>
+    <span class="qb-chip">👨‍⚕️ ${doc?.name || 'Doctor'}</span>
     <span class="qb-chip">🏷️ ${resType}</span>
   `;
 }
@@ -546,13 +645,15 @@ async function handleQuickBookSubmit(e) {
   };
 
   try {
-    const booking = await api.createBookingAtomic(payload);
+    await api.createBookingAtomic(payload);
     closeModal('quick-book-modal');
-    showToast(`✅ ${resType} booked successfully!`, 'success');
+    showToast(`✅ ${resType} booked! Use "From Booking" to check in.`, 'success');
     await loadWorkloadData();
-    if (selectedDoctorId === docId) {
+    if (selectedDoctorId === docId && $('doctor-checkin-modal').classList.contains('open')) {
       await loadDoctorCheckinData();
     }
+    // Reset form
+    $('qb-form').reset();
   } catch (err) {
     $('qb-error').textContent = err.message || 'Booking failed.';
     $('qb-error').classList.remove('hidden');

@@ -442,14 +442,65 @@ export const api = {
         p_created_by: payload.created_by || null, p_username: payload.username || 'system',
         p_existing_patient_id: payload.existing_patient_id || null,
       });
-      if (error) throw new Error(error.message);
+      // If the DB still has NOT NULL on token_number, fall back to direct insert with a placeholder token
+      if (error) {
+        if (error.message && (error.message.includes('token_number') || error.message.includes('token_code')) && error.message.includes('not-null')) {
+          return await this._createBookingWithFallbackToken(payload);
+        }
+        throw new Error(error.message);
+      }
       return data;
     }
-    // Local fallback
-    if (payload.slot_index && payload.slot_index > 0) {
-      const existing = _bookings.find(b => b.doctor_id === payload.doctor_id && b.shift_id === payload.shift_id && b.booking_date === payload.booking_date && b.slot_index === payload.slot_index && !b.deleted_at && b.status !== 'cancelled');
-      if (existing) throw new Error('Slot just booked by another user');
+    // Local fallback (no Supabase)
+    return this._createBookingLocalFallback(payload);
+  },
+
+  // Fallback when remote DB still has NOT NULL on token columns:
+  // inserts patient + booking directly with a negative placeholder token
+  // (negative = never clashes with real tokens 1,2,3...).
+  // checkin_booking replaces it with the real sequential token at check-in.
+  async _createBookingWithFallbackToken(payload) {
+    // Upsert patient first
+    const fp = `${payload.phone_code || '+92'}${payload.phone_prefix || ''}${payload.phone_number || ''}`;
+    let patientId = payload.existing_patient_id || null;
+    if (!patientId) {
+      // Try to find by CNIC or phone
+      let patientQ = supabase.from('patients').select('id');
+      if (payload.cnic) patientQ = patientQ.eq('cnic', payload.cnic);
+      else patientQ = patientQ.eq('full_phone', fp);
+      const { data: existingP } = await patientQ.maybeSingle();
+      if (existingP) {
+        patientId = existingP.id;
+      } else {
+        const { data: newP, error: pErr } = await supabase.from('patients').insert({
+          first_name: payload.first_name, last_name: payload.last_name || null,
+          cnic: payload.cnic || null, phone_code: payload.phone_code || '+92',
+          phone_prefix: payload.phone_prefix || '300', phone_number: payload.phone_number || '',
+          full_phone: fp, city: payload.city || null, area: payload.area || null,
+          age: payload.age || null, patient_mrn: `MRN-${Date.now().toString().slice(-6)}`,
+        }).select('id').single();
+        if (pErr) throw new Error(pErr.message);
+        patientId = newP.id;
+      }
     }
+    // Placeholder token: large negative number so it never conflicts
+    const placeholderToken = -(Math.floor(Date.now() % 10000000) + Math.floor(Math.random() * 999));
+    const { data: bData, error: bErr } = await supabase.from('bookings').insert({
+      doctor_id: payload.doctor_id, shift_id: payload.shift_id,
+      booking_date: payload.booking_date, patient_id: patientId,
+      slot_index: payload.slot_index || 1, slot_time: payload.slot_time || '08:00',
+      slot_time_formatted: payload.slot_time_formatted || '8:00 AM',
+      token_number: placeholderToken, token_code: 'Pending',
+      reservation_type: payload.reservation_type, purpose: payload.purpose,
+      source: payload.source || 'Walk-in', called_as: payload.called_as || 'Hospital Patient',
+      status: 'pending', remarks: payload.remarks || null,
+      created_by: payload.created_by || null,
+    }).select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name)').single();
+    if (bErr) throw new Error(bErr.message);
+    return { ...bData, doctor_name: bData.doctor?.name, shift_name: bData.shift?.name };
+  },
+
+  _createBookingLocalFallback(payload) {
     const fp = `${payload.phone_code || '+92'}${payload.phone_prefix || ''}${payload.phone_number || ''}`;
     let patient = payload.existing_patient_id
       ? _patients.find(p => p.id === payload.existing_patient_id)
@@ -623,15 +674,20 @@ export const api = {
 
   async getReceptionBookings(doctorId, dateStr = todayDateString(), statusFilter = 'pending') {
     if (isSupabaseConfigured && supabase) {
+      // NOTE: do NOT join counseling_sessions here — it causes a schema error on some DBs
       let q = supabase.from('bookings')
-        .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name), counseling:counseling_sessions(status)')
+        .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name)')
         .eq('booking_date', dateStr)
         .is('deleted_at', null);
       if (doctorId) q = q.eq('doctor_id', doctorId);
       if (statusFilter === 'pending') {
         q = q.eq('status', 'pending').order('slot_index');
       } else if (statusFilter === 'checked_in') {
-        q = q.in('status', ['checked_in', 'in_process', 'completed']).order('token_number', { ascending: true, nullsFirst: false });
+        q = q.in('status', ['checked_in', 'in_process', 'completed'])
+              .order('token_number', { ascending: true, nullsFirst: false });
+      } else {
+        // 'all' — no status filter, fetch everything for this doctor+date
+        q = q.order('slot_index');
       }
       const { data, error } = await q;
       if (!error && data) {
@@ -639,10 +695,12 @@ export const api = {
           ...b,
           doctor_name: b.doctor?.name,
           shift_name: b.shift?.name,
-          counseling_status: b.counseling?.[0]?.status || b.counseling?.status || null
+          counseling_status: null, // fetched separately if needed
         }));
       }
+      if (error) console.warn('getReceptionBookings Supabase error:', error.message);
     }
+    // Local in-memory fallback
     let all = _bookings.filter(b => b.booking_date === dateStr && !b.deleted_at && b.status !== 'cancelled');
     if (doctorId) all = all.filter(b => b.doctor_id === doctorId);
     if (statusFilter === 'pending') {
@@ -651,7 +709,8 @@ export const api = {
       return all.filter(b => b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed')
                 .sort((a, b) => (a.token_number || 0) - (b.token_number || 0));
     }
-    return all;
+    // 'all'
+    return all.sort((a, b) => (a.slot_index || 0) - (b.slot_index || 0));
   },
 
   async searchReceptionBookings(searchQuery, dateStr = todayDateString()) {

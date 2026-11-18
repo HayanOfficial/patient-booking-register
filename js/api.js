@@ -647,7 +647,7 @@ export const api = {
 
   // --- STEP 3: RECEPTION DASHBOARD HELPERS ---
   async getDoctorWorkload(dateStr = todayDateString()) {
-    const doctors = await this.getDoctors();
+    const doctors = await this.getActiveDoctors();
     let bookings = [];
     if (isSupabaseConfigured && supabase) {
       const { data } = await supabase.from('bookings').select('doctor_id, status, deleted_at').eq('booking_date', dateStr).is('deleted_at', null);

@@ -265,14 +265,19 @@ function filterDoctorCards(query) {
 }
 
 // --- Select Doctor & Check-in Desk Modals ---
-function openSelectDoctorModal() {
-  // Always refresh data when opening
-  loadWorkloadData().then(() => {
-    $('select-doctor-modal').classList.add('open');
-    $('modal-quick-doctor-search').value = '';
-    $('modal-find-patient-input').value = '';
-    filterDoctorCards('');
-  });
+async function openSelectDoctorModal() {
+  // Show modal immediately with current cached data, then refresh
+  $('select-doctor-modal').classList.add('open');
+  $('modal-quick-doctor-search').value = '';
+  $('modal-find-patient-input').value = '';
+  filterDoctorCards('');
+
+  // Refresh doctor workload counts in background
+  try {
+    await loadWorkloadData();
+  } catch (err) {
+    console.warn('Could not refresh workload:', err);
+  }
 }
 
 // =========================================================

@@ -224,7 +224,6 @@ function renderSelectDoctorCards(workloads) {
             <span style="font-size:1.3rem;">👨‍⚕️</span>
             <div>
               <strong style="color:#0f172a;font-size:.95rem;">${w.name}</strong>
-              <div style="font-size:.78rem;color:#64748b;">${shift?.name || 'Default Shift'}</div>
             </div>
           </div>
           <span class="doctor-select-badge">${w.total_bookings}</span>
@@ -511,7 +510,6 @@ function onQuickBookDoctorChange() {
   const resType = $('qb-res-type').value;
   $('qb-chips').innerHTML = `
     <span class="qb-chip">👤 ${doc?.name || 'Doctor'}</span>
-    <span class="qb-chip">🥞 ${shifts[0]?.name || 'Shift'}</span>
     <span class="qb-chip">🏷️ ${resType}</span>
   `;
 }

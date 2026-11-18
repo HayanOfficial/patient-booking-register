@@ -65,11 +65,12 @@ export function logout() {
 
 /** Local fallback users for demo/offline mode */
 const LOCAL_USERS = [
-  { id: '11111111-1111-1111-1111-111111111111', username: 'admin',        full_name: 'System Administrator', email: 'admin@clinic.com',        role: 'admin',        status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-  { id: '22222222-2222-2222-2222-222222222222', username: 'operator',     full_name: 'Lead Operator Ali',     email: 'ali@clinic.com',          role: 'operator',     status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-  { id: '33333333-3333-3333-3333-333333333333', username: 'receptionist', full_name: 'Front Desk Sara',       email: 'sara@clinic.com',         role: 'receptionist', status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+  { id: '11111111-1111-1111-1111-111111111111', username: 'admin',        full_name: 'System Administrator', email: 'admin@bariatricclinic.com', role: 'admin',        status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+  { id: '22222222-2222-2222-2222-222222222222', username: 'operator',     full_name: 'Lead Operator Ali',     email: 'ali@bariatricclinic.com',   role: 'operator',     status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+  { id: '33333333-3333-3333-3333-333333333333', username: 'receptionist', full_name: 'Front Desk Sara',       email: 'sara@bariatricclinic.com',  role: 'receptionist', status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+  { id: '44444444-4444-4444-4444-444444444444', username: 'counselor',    full_name: 'Lead Counselor Sana',   email: 'counselor@bariatricclinic.com', role: 'counselor', status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }
 ];
-const LOCAL_PASSWORDS = { admin: 'admin123', operator: 'operator123', receptionist: 'reception123' };
+const LOCAL_PASSWORDS = { admin: 'admin123', operator: 'operator123', receptionist: 'reception123', counselor: 'counselor123' };
 
 /** Authenticate user against Supabase or local fallback */
 export async function authenticateUser(usernameOrEmail, password) {

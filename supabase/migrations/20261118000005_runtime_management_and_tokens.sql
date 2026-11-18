@@ -295,6 +295,10 @@ CREATE POLICY "Public Read Token Counters" ON public.daily_token_counters FOR SE
 -- Ensure checked_in_at column on bookings
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
 
+-- Token is issued ONLY upon check-in, so token_number and token_code must be nullable at booking time
+ALTER TABLE public.bookings ALTER COLUMN token_number DROP NOT NULL;
+ALTER TABLE public.bookings ALTER COLUMN token_code DROP NOT NULL;
+
 -- Unique constraint preventing two bookings from having the same token number on the same day for same doctor & shift
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_token 
 ON public.bookings(doctor_id, shift_id, booking_date, token_number) 

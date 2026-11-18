@@ -28,6 +28,7 @@
       <button class="btn-amber-from-booking" id="btn-from-booking">📅 From Booking</button>
       <button class="btn-amber-outline" id="btn-from-waiting">⏳ From Waiting List</button>
       <button class="btn-blue-add-waiting" id="btn-add-waiting">👤+ Add Waiting</button>
+      <a href="./counseling.html" class="btn-amber-outline" style="text-decoration:none;" id="btn-nav-counseling">🩺 Counseling</a>
       <a href="./booking.html" class="btn-modern-list">📅 Modern List View</a>
 
       <!-- User menu -->
@@ -37,6 +38,7 @@
         </button>
         <div class="dropdown-menu" id="user-menu">
           <a href="./booking.html" class="dropdown-item">📋 Booking Sheet</a>
+          <a href="./counseling.html" class="dropdown-item">🩺 Counseling Dashboard</a>
           <a href="./reports.html" class="dropdown-item">📊 Reports</a>
           <a href="./settings.html" class="dropdown-item" id="nav-settings-link">⚙️ Settings</a>
           <a href="./users.html" class="dropdown-item" id="nav-users-link">👥 Users</a>
@@ -174,7 +176,7 @@
       <div style="padding:16px 20px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
           <div>
-            <div style="font-size:.85rem;color:#475569;font-weight:600;">Doctors with bookings today. Click a shift to check in.</div>
+            <div style="font-size:.85rem;color:#475569;font-weight:600;">Doctors with bookings today. Click a doctor to check in.</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-size:.8rem;color:#64748b;">Find patient (all doctors, today):</span>
@@ -267,15 +269,10 @@
           <input type="hidden" id="qb-shift-id" />
           <input type="hidden" id="qb-res-type" value="Appointment" />
 
-          <div class="form-row form-row--2">
-            <div class="form-group">
-              <label class="form-label">Doctor <span class="required">*</span></label>
-              <select class="form-select" id="qb-doc-select" required></select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Shift <span class="required">*</span></label>
-              <select class="form-select" id="qb-shift-select" required></select>
-            </div>
+          <div class="form-group">
+            <label class="form-label">Doctor <span class="required">*</span></label>
+            <select class="form-select" id="qb-doc-select" required></select>
+            <select id="qb-shift-select" style="display:none;" required></select>
           </div>
 
           <div class="form-row form-row--2">

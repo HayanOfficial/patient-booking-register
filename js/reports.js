@@ -264,11 +264,10 @@ async function renderTokens(startDate, endDate, doctorId) {
   const data = await api.getReportTokens(startDate, endDate, doctorId);
   currentReportData = data.dailyTokens || [];
   $('tokens-metrics').innerHTML = [
-    { label: 'Total Tokens Issued', value: data.totalTokensIssued },
-    { label: 'Appointment Tokens (A-)', value: data.appointmentTokens },
-    { label: 'Walk-in Tokens (W-)', value: data.walkinTokens },
-    { label: 'Token Reprints', value: data.totalReprints },
-    { label: 'Cancelled Tokens', value: data.cancelledTokens },
+    { label: 'Total Tokens Issued', value: data.totalTokensIssued || 0 },
+    { label: 'Token Reprints', value: data.totalReprints || 0 },
+    { label: 'Voided / Cancelled', value: data.voidedTokens || 0 },
+    { label: 'Average Wait Time', value: data.avgWaitTime || '—' },
   ].map(m => `
     <div class="summary-card">
       <div class="s-label">${m.label}</div>
@@ -280,11 +279,10 @@ async function renderTokens(startDate, endDate, doctorId) {
   tbody.innerHTML = (data.dailyTokens || []).map(t => `
     <tr>
       <td>${t.date}</td>
-      <td><strong>${t.total_tokens}</strong></td>
-      <td>${t.appointment_tokens}</td>
-      <td>${t.walkin_tokens}</td>
+      <td><strong>#${t.total_tokens}</strong></td>
       <td>${t.reprint_count}</td>
-      <td>${t.cancelled_tokens}</td>
+      <td>${t.voided_tokens}</td>
+      <td>${t.avg_wait || '—'}</td>
     </tr>
   `).join('');
 }

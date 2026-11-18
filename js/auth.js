@@ -38,10 +38,16 @@ export function requireAuth(allowedRoles = null) {
   return user;
 }
 
-/** Redirect to booking if already logged in (use on login page) */
+/** Redirect to appropriate dashboard if already logged in (use on login page) */
 export function redirectIfLoggedIn() {
   const user = getSession();
-  if (user) window.location.href = '/booking.html';
+  if (user) {
+    if (user.role === 'admin' || user.role === 'receptionist') {
+      window.location.href = './reception.html';
+    } else {
+      window.location.href = './booking.html';
+    }
+  }
 }
 
 /** Logout */

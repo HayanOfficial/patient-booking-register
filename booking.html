@@ -17,6 +17,9 @@
     <div class="header-right">
       <span id="realtime-indicator" class="realtime-indicator realtime-indicator--connected">● Live</span>
       <span class="header-date" id="hdr-today-date">2026-09-29</span>
+      <a href="./reception.html" class="today-btn" id="hdr-reception-link" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;background:#2563eb;color:#fff;">
+        🏥 Reception Desk
+      </a>
       <a href="./display.html" target="_blank" class="today-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
         📺 Dashboard View
       </a>
@@ -27,6 +30,7 @@
         <div class="dropdown-menu" id="user-menu">
           <div class="dropdown-item text-muted text-xs" id="hdr-role-label">Role: Operator</div>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
+          <a href="./reception.html" class="dropdown-item" id="menu-reception-link">🏥 Reception Desk</a>
           <a href="./reports.html" class="dropdown-item">📊 Reports &amp; Analytics</a>
           <a href="./settings.html" class="dropdown-item" id="menu-settings-link">⚙️ Clinic Settings</a>
           <a href="./users.html" class="dropdown-item" id="menu-users-link">👥 User Management</a>
@@ -71,8 +75,8 @@
           <div class="doctor-display" id="doctor-display">
             <div class="doctor-avatar" id="doctor-avatar">👨‍⚕️</div>
             <div>
-              <div class="doctor-name" id="doctor-name-display">Dr Naeem Khattak</div>
-              <div class="doctor-spec" id="doctor-spec-display">Consultant Eye Surgeon</div>
+              <div class="doctor-name" id="doctor-name-display">Doctor</div>
+              <div class="doctor-spec" id="doctor-spec-display">Specialist</div>
             </div>
           </div>
         </div>
@@ -199,8 +203,8 @@
         </div>
         <div class="qb-time" id="qb-time">8:00 a.m.</div>
         <div class="qb-chips" id="qb-chips">
-          <span class="qb-chip">👤 Dr Naeem Khattak</span>
-          <span class="qb-chip">🥞 Default Shift</span>
+          <span class="qb-chip" id="qb-doctor-chip">👤 Doctor</span>
+          <span class="qb-chip" id="qb-shift-chip">🥞 Shift</span>
           <span class="qb-chip" id="qb-clinic-chip">🏢 Clinic</span>
         </div>
       </div>

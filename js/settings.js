@@ -52,6 +52,15 @@ async function init() {
   // Audit
   $('refresh-audit-btn').addEventListener('click', () => loadAuditLogs());
 
+  // Realtime updates for doctors & shifts
+  api.subscribeToRealtime(e => {
+    if (e.event === 'doctor_change') {
+      loadDoctorsTable();
+    } else if (e.event === 'shift_change') {
+      loadShiftsTable();
+    }
+  });
+
   // Load initial data
   await loadClinicProfile();
   await loadDoctorsTable();
@@ -116,10 +125,20 @@ async function loadDoctorsTable() {
 
   tbody.querySelectorAll('[data-doc-del]').forEach(b => {
     b.addEventListener('click', async () => {
-      if (confirmDialog('Deactivate this doctor?')) {
-        await api.deleteDoctor(b.dataset.docDel);
-        showToast('Doctor deleted.', 'success');
-        loadDoctorsTable();
+      const docId = b.dataset.docDel;
+      try {
+        const futureCount = await api.checkDoctorFutureBookings(docId);
+        let msg = 'Deactivate and delete this doctor?';
+        if (futureCount > 0) {
+          msg = `⚠️ Warning: This doctor has ${futureCount} upcoming booking(s).\nDeleting will deactivate the doctor without breaking existing history. Proceed?`;
+        }
+        if (confirmDialog(msg)) {
+          await api.deleteDoctor(docId);
+          showToast('Doctor deleted.', 'success');
+          await loadDoctorsTable();
+        }
+      } catch (err) {
+        showToast('Failed to delete doctor: ' + err.message, 'error');
       }
     });
   });
@@ -130,6 +149,7 @@ function openDoctorModal(doc = null) {
   $('doc-name').value = doc ? doc.name : '';
   $('doc-specialty').value = doc ? doc.specialty : '';
   $('doc-phone').value = doc ? (doc.phone || '') : '';
+  $('doc-avatar').value = doc ? (doc.avatar_url || '') : '';
   $('doc-active').checked = doc ? doc.is_active : true;
   $('doctor-modal-title').textContent = doc ? 'Edit Doctor' : 'Add New Doctor';
   $('doctor-modal').classList.add('open');
@@ -144,6 +164,7 @@ async function saveDoctor() {
     name,
     specialty,
     phone: $('doc-phone').value.trim(),
+    avatar_url: $('doc-avatar').value.trim(),
     is_active: $('doc-active').checked,
   };
   try {
@@ -172,6 +193,7 @@ async function loadShiftsTable() {
         <td><span class="badge ${s.is_active ? 'badge--green' : 'badge--gray'}">${s.is_active ? 'Active' : 'Disabled'}</span></td>
         <td>
           <button class="action-btn" title="Edit" data-shf-edit="${s.id}">✏️</button>
+          <button class="action-btn action-btn--danger" title="Delete" data-shf-del="${s.id}">🗑</button>
         </td>
       </tr>
     `;
@@ -181,6 +203,26 @@ async function loadShiftsTable() {
     b.addEventListener('click', () => {
       const shf = allShifts.find(x => x.id === b.dataset.shfEdit);
       if (shf) openShiftModal(shf);
+    });
+  });
+
+  tbody.querySelectorAll('[data-shf-del]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const shiftId = b.dataset.shfDel;
+      try {
+        const futureCount = await api.checkShiftFutureBookings(shiftId);
+        let msg = 'Delete this shift?';
+        if (futureCount > 0) {
+          msg = `⚠️ Warning: This shift has ${futureCount} upcoming booking(s).\nDeleting will deactivate the shift without breaking old records. Proceed?`;
+        }
+        if (confirmDialog(msg)) {
+          await api.deleteShift(shiftId);
+          showToast('Shift deleted.', 'success');
+          await loadShiftsTable();
+        }
+      } catch (err) {
+        showToast('Failed to delete shift: ' + err.message, 'error');
+      }
     });
   });
 }
@@ -195,6 +237,14 @@ function openShiftModal(shf = null) {
   $('shf-start').value = shf ? shf.start_time : '08:00';
   $('shf-end').value = shf ? shf.end_time : '22:00';
   $('shf-duration').value = shf ? shf.slot_duration_minutes : 9;
+  $('shf-max-walkins').value = shf?.max_walkins ?? 10;
+  $('shf-holidays').value = (shf?.holidays || []).join(', ');
+
+  const activeDays = shf?.days_of_week || ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  document.querySelectorAll('#shf-days input[type="checkbox"]').forEach(cb => {
+    cb.checked = activeDays.includes(cb.value);
+  });
+
   $('shift-modal-title').textContent = shf ? 'Edit Shift' : 'Add New Shift';
   $('shift-modal').classList.add('open');
 }
@@ -202,6 +252,10 @@ function openShiftModal(shf = null) {
 async function saveShift() {
   const name = $('shf-name').value.trim();
   if (!name) { showToast('Shift name is required', 'error'); return; }
+
+  const days_of_week = Array.from(document.querySelectorAll('#shf-days input[type="checkbox"]:checked')).map(cb => cb.value);
+  const rawHolidays = $('shf-holidays').value.split(',').map(s => s.trim()).filter(Boolean);
+
   const payload = {
     id: $('shf-id').value || undefined,
     doctor_id: $('shf-doctor').value,
@@ -209,6 +263,9 @@ async function saveShift() {
     start_time: $('shf-start').value,
     end_time: $('shf-end').value,
     slot_duration_minutes: parseInt($('shf-duration').value, 10) || 9,
+    max_walkins: parseInt($('shf-max-walkins').value, 10) || 10,
+    days_of_week: days_of_week.length > 0 ? days_of_week : ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+    holidays: rawHolidays,
     is_active: true,
   };
   try {

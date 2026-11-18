@@ -8,6 +8,7 @@ export default defineConfig({
       input: {
         index: 'index.html',
         booking: 'booking.html',
+        reception: 'reception.html',
         reports: 'reports.html',
         settings: 'settings.html',
         users: 'users.html',

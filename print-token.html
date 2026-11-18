@@ -3,74 +3,250 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Token Print — Patient Booking Register</title>
+  <title>Token Slip — Bariatric Surgery Clinic</title>
   <link rel="stylesheet" href="./css/style.css" />
   <link rel="stylesheet" href="./css/print.css" />
+  <style>
+    body {
+      background: #f3f4f6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .print-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .format-selector {
+      display: flex;
+      gap: 8px;
+      background: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .format-btn {
+      padding: 4px 12px;
+      border: 1px solid #d1d5db;
+      background: #f9fafb;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .85rem;
+      font-weight: 600;
+    }
+    .format-btn.active {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+    .token-slip {
+      background: #fff;
+      width: 80mm;
+      max-width: 100%;
+      padding: 16px;
+      border-radius: 6px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .token-slip.a5-format {
+      width: 148mm;
+      padding: 24px;
+    }
+    .slip-header h2 {
+      margin: 0 0 4px 0;
+      font-size: 1.15rem;
+      color: #111827;
+      font-weight: 800;
+    }
+    .slip-header p {
+      margin: 0 0 10px 0;
+      font-size: .75rem;
+      color: #6b7280;
+    }
+    .token-hero {
+      border-top: 2px dashed #9ca3af;
+      border-bottom: 2px dashed #9ca3af;
+      padding: 12px 0;
+      margin: 12px 0;
+    }
+    .token-label {
+      font-size: .8rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      color: #4b5563;
+      text-transform: uppercase;
+    }
+    .token-large-num {
+      font-size: 3.5rem;
+      font-weight: 900;
+      line-height: 1;
+      color: #1e3a8a;
+      margin: 4px 0;
+      font-family: monospace, sans-serif;
+    }
+    .slip-details {
+      width: 100%;
+      text-align: left;
+      font-size: .82rem;
+      margin: 12px 0;
+      border-collapse: collapse;
+    }
+    .slip-details td {
+      padding: 3px 0;
+    }
+    .slip-details td:first-child {
+      color: #6b7280;
+      width: 38%;
+      font-weight: 500;
+    }
+    .slip-details td:last-child {
+      font-weight: 700;
+      color: #111827;
+    }
+    .qr-box {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .slip-footer {
+      font-size: .7rem;
+      color: #9ca3af;
+      margin-top: 10px;
+    }
+  </style>
 </head>
-<body style="background:#f3f4f6; display:flex; align-items:center; justify-content:center; min-height:100vh;">
-  <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
-    <div class="token-print-wrap" id="token-wrap">
-      <div class="token-print-clinic">
-        <h2 id="pt-clinic">Bariatric Surgery Clinic</h2>
-        <p id="pt-addr">Patient Booking Register</p>
-      </div>
-      <div class="token-print-token">
-        <div class="token-type" id="pt-type">APPOINTMENT</div>
-        <div class="big-token" id="pt-code">A-001</div>
-        <div id="pt-date" style="font-size:.8rem;color:#6b7280;"></div>
-      </div>
-      <div class="token-print-info">
-        <table>
-          <tr><td>Patient:</td><td id="pt-name">—</td></tr>
-          <tr><td>MRN:</td><td id="pt-mrn">—</td></tr>
-          <tr><td>Phone:</td><td id="pt-phone">—</td></tr>
-          <tr><td>Doctor:</td><td id="pt-doctor">—</td></tr>
-          <tr><td>Shift:</td><td id="pt-shift">—</td></tr>
-          <tr><td>Time:</td><td id="pt-time">—</td></tr>
-          <tr><td>Purpose:</td><td id="pt-purpose">—</td></tr>
-        </table>
-      </div>
-      <div style="text-align:center;margin-top:14px;font-size:.7rem;color:#9ca3af;">
-        Please arrive 10 minutes before your slot time. Thank you!
-      </div>
+<body>
+  <div class="print-container">
+    <div class="format-selector no-print">
+      <span style="font-size:.85rem;font-weight:600;display:flex;align-items:center;">Size:</span>
+      <button class="format-btn active" id="btn-80mm" onclick="setFormat('80mm')">80mm Thermal</button>
+      <button class="format-btn" id="btn-a5" onclick="setFormat('a5')">A5 Paper</button>
+      <button class="btn btn--primary btn--sm" onclick="window.print()" style="margin-left:8px;">🖨️ Print</button>
+      <button class="btn btn--secondary btn--sm" onclick="window.close()">✕ Close</button>
     </div>
-    <div class="no-print" style="display:flex;gap:10px;">
-      <button class="btn btn--primary" onclick="window.print()">🖨️ Print Slip</button>
-      <button class="btn btn--secondary" onclick="window.close()">Close Window</button>
+
+    <div class="token-slip" id="token-slip">
+      <div class="slip-header">
+        <h2 id="pt-clinic">Bariatric Surgery Clinic</h2>
+        <p id="pt-tagline">Advanced Bariatric, Laparoscopic &amp; Metabolic Center</p>
+      </div>
+
+      <div class="token-hero">
+        <div class="token-label">Token Number</div>
+        <div class="token-large-num" id="pt-num">—</div>
+        <div id="pt-checkin-time" style="font-size:.78rem;font-weight:600;color:#059669;margin-top:2px;"></div>
+      </div>
+
+      <table class="slip-details">
+        <tr><td>Patient Name:</td><td id="pt-name">—</td></tr>
+        <tr><td>MRN / Patient ID:</td><td id="pt-mrn">—</td></tr>
+        <tr><td>Doctor:</td><td id="pt-doctor">—</td></tr>
+        <tr><td>Date:</td><td id="pt-date">—</td></tr>
+        <tr><td>Slot / Time:</td><td id="pt-slot-time">—</td></tr>
+        <tr><td>Visit Purpose:</td><td id="pt-purpose">—</td></tr>
+      </table>
+
+      <div class="qr-box">
+        <!-- Neutral SVG QR Code representation -->
+        <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+          <line x1="7" y1="7" x2="7.01" y2="7" stroke-width="3"></line>
+          <line x1="18" y1="7" x2="18.01" y2="7" stroke-width="3"></line>
+          <line x1="18" y1="18" x2="18.01" y2="18" stroke-width="3"></line>
+          <line x1="7" y1="18" x2="7.01" y2="18" stroke-width="3"></line>
+        </svg>
+        <span style="font-size:.65rem;color:#9ca3af;" id="pt-verify-text">Scan for Queue Status</span>
+      </div>
+
+      <div class="slip-footer">
+        Please wait for your token number to appear on the display screen.<br />
+        Thank you for choosing Bariatric Surgery Clinic.
+      </div>
     </div>
   </div>
 
   <script type="module">
     import { api } from './js/api.js';
 
-    // Load clinic info
+    window.setFormat = function(fmt) {
+      const slip = document.getElementById('token-slip');
+      const b80 = document.getElementById('btn-80mm');
+      const ba5 = document.getElementById('btn-a5');
+      if (fmt === 'a5') {
+        slip.classList.add('a5-format');
+        ba5.classList.add('active');
+        b80.classList.remove('active');
+      } else {
+        slip.classList.remove('a5-format');
+        b80.classList.add('active');
+        ba5.classList.remove('active');
+      }
+    };
+
+    // Load Clinic Info
     api.getClinicInfo().then(info => {
       if (info?.name) document.getElementById('pt-clinic').textContent = info.name;
-      if (info?.address) document.getElementById('pt-addr').textContent = info.address;
+      if (info?.tagline) document.getElementById('pt-tagline').textContent = info.tagline;
     });
 
-    try {
-      const raw = sessionStorage.getItem('print_token_data');
-      if (raw) {
-        const b = JSON.parse(raw);
-        const p = b.patient || {};
-        document.getElementById('pt-code').textContent = b.token_code || '—';
-        document.getElementById('pt-type').textContent = (b.reservation_type || 'APPOINTMENT').toUpperCase();
-        document.getElementById('pt-date').textContent = b.booking_date || '';
-        document.getElementById('pt-name').textContent = [p.first_name, p.last_name].filter(Boolean).join(' ') || '—';
-        document.getElementById('pt-mrn').textContent = p.patient_mrn || '—';
-        document.getElementById('pt-phone').textContent = p.full_phone || '—';
-        document.getElementById('pt-doctor').textContent = b.doctor_name || '—';
-        document.getElementById('pt-shift').textContent = b.shift_name || '—';
-        document.getElementById('pt-time').textContent = b.slot_time_formatted || b.slot_time || '—';
-        document.getElementById('pt-purpose').textContent = b.purpose || '—';
+    async function init() {
+      let b = null;
+      const urlParams = new URLSearchParams(window.location.search);
+      const bookingId = urlParams.get('id');
 
-        setTimeout(() => window.print(), 500);
+      if (bookingId) {
+        try {
+          const bookings = await api.getBookings();
+          b = bookings.find(x => x.id === bookingId);
+        } catch (e) { console.warn(e); }
       }
-    } catch (e) {
-      console.warn('Print data parse error:', e);
+
+      if (!b) {
+        try {
+          const raw = sessionStorage.getItem('print_token_data');
+          if (raw) b = JSON.parse(raw);
+        } catch (e) { console.warn(e); }
+      }
+
+      if (b) {
+        const p = b.patient || {};
+        const tokenNum = b.token_number || b.token_code || '1';
+        document.getElementById('pt-num').textContent = String(tokenNum).padStart(2, '0');
+        
+        const inTime = b.checked_in_at || b.check_in_time;
+        if (inTime) {
+          const dt = new Date(inTime);
+          document.getElementById('pt-checkin-time').textContent = 'Checked in: ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+        } else {
+          document.getElementById('pt-checkin-time').textContent = 'Checked in: ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+
+        document.getElementById('pt-name').textContent = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Patient';
+        document.getElementById('pt-mrn').textContent = p.patient_mrn || '—';
+        document.getElementById('pt-doctor').textContent = b.doctor_name || b.doctor?.name || 'Dr Zarin Khan';
+        document.getElementById('pt-date').textContent = b.booking_date || new Date().toISOString().split('T')[0];
+        document.getElementById('pt-slot-time').textContent = b.slot_time_formatted || b.slot_time || '—';
+        document.getElementById('pt-purpose').textContent = b.purpose || 'Consultation';
+
+        // Auto print
+        setTimeout(() => window.print(), 400);
+      }
     }
+
+    init();
   </script>
 </body>
 </html>
-

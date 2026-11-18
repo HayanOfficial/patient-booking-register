@@ -5,6 +5,7 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 import { SlotEngine } from './slot-engine.js';
 import { todayDateString, formatTime12h } from './utils.js';
+import { getSession } from './auth.js';
 
 // ---------------------------------------------------------------------------
 // BroadcastChannel for cross-tab sync
@@ -21,8 +22,8 @@ function broadcastEvent(type, payload) {
 // Default / seed data (local fallback)
 // ---------------------------------------------------------------------------
 const DEFAULT_DOCTORS = [
-  { id: 'd1111111-1111-1111-1111-111111111111', name: 'Dr Naeem Khattak',   specialty: 'Consultant Bariatric & Laparoscopic Surgeon', phone: '+923005901111', is_active: true, sort_order: 1 },
-  { id: 'd2222222-2222-2222-2222-222222222222', name: 'Dr Zarin Khan',       specialty: 'Consultant Laparoscopic & General Surgeon',   phone: '+923005902222', is_active: true, sort_order: 2 },
+  { id: 'd1111111-1111-1111-1111-111111111111', name: 'Dr Zarin Khan',       specialty: 'Consultant Laparoscopic & Bariatric Surgeon', phone: '+923005901111', is_active: true, sort_order: 1 },
+  { id: 'd2222222-2222-2222-2222-222222222222', name: 'Dr Tariq Shah',      specialty: 'Consultant Laparoscopic & General Surgeon',   phone: '+923005902222', is_active: true, sort_order: 2 },
 ];
 
 const DEFAULT_SHIFTS = [
@@ -76,7 +77,7 @@ function generateSeedBookings() {
   const bookings = [];
   const patients = [];
   const firstNames = ['Ubaida','Balbla','Fareed Ullah','Jahanzaib','Abdur Raheem','Qazi Maria','Rasheed','Saeed Khan','Akbar Jan','Hussain','Dr Aizaz','Zulfiqar','Kamran','Bushra Bibi','Taimoor','Noman'];
-  const lastNames  = ['Khan','Afridi','Khattak','Mohmand','Jan','Shah','Bangash','Shinwari'];
+  const lastNames  = ['Khan','Afridi','Ahmad','Mohmand','Jan','Shah','Bangash','Shinwari'];
   const sources    = ['Self','Facebook','TikTok','Instagram','YouTube','Website','WhatsApp','Referral','Phone call'];
   const purposes   = ['Consultation','Follow Up','Procedure','Report Review'];
   const areas      = ['Hayatabad Phase 1','Hayatabad Phase 2','University Town','Kohat Road Peshawar','Saddar'];
@@ -146,7 +147,7 @@ function generateSeedBookings() {
         created_at: `${dateStr}T08:00:00+05:00`,
         updated_at: `${dateStr}T08:00:00+05:00`,
         patient,
-        doctor_name: 'Dr Naeem Khattak',
+        doctor_name: 'Dr Zarin Khan',
         shift_name: 'Default Shift',
       });
     }
@@ -168,6 +169,7 @@ let _users    = [
   { id: '33333333-3333-3333-3333-333333333333', username: 'receptionist', full_name: 'Front Desk Sara',      email: 'sara@clinic.com',   role: 'receptionist', status: 'active', must_change_password: false, failed_attempts: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
 ];
 let _auditLogs = [];
+let _dailyCounters = {};
 
 // ---------------------------------------------------------------------------
 // API Object
@@ -192,32 +194,60 @@ export const api = {
   },
 
   async saveDoctor(doctor) {
+    const user = getSession();
+    if (!user || user.role !== 'admin') {
+      throw new Error('Unauthorized: Admin role required to manage doctors.');
+    }
     if (isSupabaseConfigured && supabase) {
-      try {
-        if (doctor.id && !doctor.id.startsWith('doc-')) {
-          const { data, error } = await supabase.from('doctors').update(doctor).eq('id', doctor.id).select().single();
-          if (!error && data) return data;
-        } else {
-          const { id, ...payload } = doctor;
-          const { data, error } = await supabase.from('doctors').insert([payload]).select().single();
-          if (!error && data) return data;
-        }
-      } catch (e) { console.warn('saveDoctor Supabase failed:', e); }
+      const { data, error } = await supabase.rpc('save_doctor_runtime', {
+        p_admin_id: user.id,
+        p_doctor: doctor,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to save doctor.');
+      broadcastEvent('doctor_change', data.doctor);
+      return data.doctor;
     }
     if (doctor.id) {
       const idx = _doctors.findIndex(d => d.id === doctor.id);
-      if (idx !== -1) { _doctors[idx] = { ..._doctors[idx], ...doctor }; return _doctors[idx]; }
+      if (idx !== -1) { _doctors[idx] = { ..._doctors[idx], ...doctor }; broadcastEvent('doctor_change', _doctors[idx]); return _doctors[idx]; }
     }
-    const nd = { id: `doc-${Date.now()}`, name: doctor.name || 'New Doctor', specialty: doctor.specialty || 'General', phone: doctor.phone || '', is_active: doctor.is_active ?? true, sort_order: doctor.sort_order || _doctors.length + 1 };
-    _doctors.push(nd); return nd;
+    const nd = { id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: doctor.name || 'New Doctor', specialty: doctor.specialty || 'General', phone: doctor.phone || '', avatar_url: doctor.avatar_url || '', is_active: doctor.is_active ?? true, sort_order: doctor.sort_order || _doctors.length + 1 };
+    _doctors.push(nd);
+    broadcastEvent('doctor_change', nd);
+    return nd;
   },
 
   async deleteDoctor(doctorId) {
+    const user = getSession();
+    if (!user || user.role !== 'admin') {
+      throw new Error('Unauthorized: Admin role required to delete doctors.');
+    }
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('doctors').update({ deleted_at: new Date().toISOString() }).eq('id', doctorId);
+      const { data, error } = await supabase.rpc('delete_doctor_runtime', {
+        p_admin_id: user.id,
+        p_doctor_id: doctorId,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to delete doctor.');
+      broadcastEvent('doctor_change', { id: doctorId, deleted: true });
       return;
     }
     _doctors = _doctors.filter(d => d.id !== doctorId);
+    broadcastEvent('doctor_change', { id: doctorId, deleted: true });
+  },
+
+  async checkDoctorFutureBookings(doctorId) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.rpc('check_future_bookings', {
+          p_doctor_id: doctorId,
+        });
+        if (!error && typeof data === 'number') return data;
+      } catch (e) { console.warn(e); }
+    }
+    const today = todayDateString();
+    return _bookings.filter(b => b.doctor_id === doctorId && b.booking_date >= today && b.status !== 'cancelled' && !b.deleted_at).length;
   },
 
   async getShifts(doctorId) {
@@ -237,24 +267,60 @@ export const api = {
   },
 
   async saveShift(shift) {
+    const user = getSession();
+    if (!user || user.role !== 'admin') {
+      throw new Error('Unauthorized: Admin role required to manage shifts.');
+    }
     if (isSupabaseConfigured && supabase) {
-      try {
-        if (shift.id && !shift.id.startsWith('shift-')) {
-          const { data, error } = await supabase.from('shifts').update(shift).eq('id', shift.id).select().single();
-          if (!error && data) return data;
-        } else {
-          const { id, ...payload } = shift;
-          const { data, error } = await supabase.from('shifts').insert([payload]).select().single();
-          if (!error && data) return data;
-        }
-      } catch (e) { console.warn('saveShift Supabase failed:', e); }
+      const { data, error } = await supabase.rpc('save_shift_runtime', {
+        p_admin_id: user.id,
+        p_shift: shift,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to save shift.');
+      broadcastEvent('shift_change', data.shift);
+      return data.shift;
     }
     if (shift.id) {
       const idx = _shifts.findIndex(s => s.id === shift.id);
-      if (idx !== -1) { _shifts[idx] = { ..._shifts[idx], ...shift }; return _shifts[idx]; }
+      if (idx !== -1) { _shifts[idx] = { ..._shifts[idx], ...shift }; broadcastEvent('shift_change', _shifts[idx]); return _shifts[idx]; }
     }
-    const ns = { id: `shift-${Date.now()}`, doctor_id: shift.doctor_id || '', name: shift.name || 'Shift', start_time: shift.start_time || '08:00', end_time: shift.end_time || '20:00', slot_duration_minutes: shift.slot_duration_minutes || 9, is_active: shift.is_active ?? true, sort_order: shift.sort_order || _shifts.length + 1 };
-    _shifts.push(ns); return ns;
+    const ns = { id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, doctor_id: shift.doctor_id || '', name: shift.name || 'Shift', start_time: shift.start_time || '08:00', end_time: shift.end_time || '20:00', slot_duration_minutes: shift.slot_duration_minutes || 9, days_of_week: shift.days_of_week || ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'], max_walkins: shift.max_walkins || 10, is_active: shift.is_active ?? true, sort_order: shift.sort_order || _shifts.length + 1 };
+    _shifts.push(ns);
+    broadcastEvent('shift_change', ns);
+    return ns;
+  },
+
+  async deleteShift(shiftId) {
+    const user = getSession();
+    if (!user || user.role !== 'admin') {
+      throw new Error('Unauthorized: Admin role required to delete shifts.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('delete_shift_runtime', {
+        p_admin_id: user.id,
+        p_shift_id: shiftId,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to delete shift.');
+      broadcastEvent('shift_change', { id: shiftId, deleted: true });
+      return;
+    }
+    _shifts = _shifts.filter(s => s.id !== shiftId);
+    broadcastEvent('shift_change', { id: shiftId, deleted: true });
+  },
+
+  async checkShiftFutureBookings(shiftId) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.rpc('check_future_bookings', {
+          p_shift_id: shiftId,
+        });
+        if (!error && typeof data === 'number') return data;
+      } catch (e) { console.warn(e); }
+    }
+    const today = todayDateString();
+    return _bookings.filter(b => b.shift_id === shiftId && b.booking_date >= today && b.status !== 'cancelled' && !b.deleted_at).length;
   },
 
   // --- CLINIC SETTINGS ---
@@ -309,7 +375,7 @@ export const api = {
       const idx = _lookups.findIndex(l => l.id === item.id);
       if (idx !== -1) { _lookups[idx] = { ..._lookups[idx], ...item }; return _lookups[idx]; }
     }
-    const nl = { id: `lookup-${Date.now()}`, category: item.category || 'source', name: item.name || '', color: item.color, parent_id: item.parent_id, is_active: item.is_active ?? true, sort_order: item.sort_order || _lookups.length + 1 };
+    const nl = { id: `lookup-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, category: item.category || 'source', name: item.name || '', color: item.color, parent_id: item.parent_id, is_active: item.is_active ?? true, sort_order: item.sort_order || _lookups.length + 1 };
     _lookups.push(nl); return nl;
   },
 
@@ -387,16 +453,215 @@ export const api = {
       ? _patients.find(p => p.id === payload.existing_patient_id)
       : _patients.find(p => (payload.cnic && p.cnic === payload.cnic) || (fp.length >= 10 && p.full_phone === fp));
     if (!patient) {
-      patient = { id: `p-${Date.now()}`, patient_mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`, first_name: payload.first_name, last_name: payload.last_name, cnic: payload.cnic, phone_code: payload.phone_code || '+92', phone_prefix: payload.phone_prefix || '300', phone_number: payload.phone_number || '', full_phone: fp, city: payload.city, area: payload.area, address: payload.address, age: payload.age };
+      patient = { id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, patient_mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`, first_name: payload.first_name, last_name: payload.last_name, cnic: payload.cnic, phone_code: payload.phone_code || '+92', phone_prefix: payload.phone_prefix || '300', phone_number: payload.phone_number || '', full_phone: fp, city: payload.city, area: payload.area, address: payload.address, age: payload.age };
       _patients.push(patient);
     }
-    const sameDayType = _bookings.filter(b => b.doctor_id === payload.doctor_id && b.shift_id === payload.shift_id && b.booking_date === payload.booking_date && b.reservation_type === payload.reservation_type && !b.deleted_at);
-    const tokenNo = sameDayType.length + 1;
-    const tokenCode = `${payload.reservation_type === 'Walk-in' ? 'W' : 'A'}-${String(tokenNo).padStart(3,'0')}`;
-    const nb = { id: `b-${Date.now()}`, booking_date: payload.booking_date, doctor_id: payload.doctor_id, shift_id: payload.shift_id, patient_id: patient.id, slot_index: payload.slot_index || (_bookings.length + 1), slot_time: payload.slot_time, slot_time_formatted: payload.slot_time_formatted, token_number: tokenNo, token_code: tokenCode, purpose: payload.purpose, reservation_type: payload.reservation_type, source: payload.source, called_as: payload.called_as, status: 'pending', remarks: payload.remarks, created_by: payload.created_by, reprinted_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), patient, doctor_name: _doctors.find(d => d.id === payload.doctor_id)?.name || '', shift_name: _shifts.find(s => s.id === payload.shift_id)?.name || '' };
+    // Step 4 New Token Rule: No token generated at booking time!
+    const nb = {
+      id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      booking_date: payload.booking_date,
+      doctor_id: payload.doctor_id,
+      shift_id: payload.shift_id,
+      patient_id: patient.id,
+      slot_index: payload.slot_index || (_bookings.length + 1),
+      slot_time: payload.slot_time,
+      slot_time_formatted: payload.slot_time_formatted,
+      token_number: null,
+      token_code: null,
+      purpose: payload.purpose,
+      reservation_type: payload.reservation_type,
+      source: payload.source,
+      called_as: payload.called_as,
+      status: 'pending',
+      remarks: payload.remarks,
+      created_by: payload.created_by,
+      reprinted_count: 0,
+      check_in_time: null,
+      checked_in_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      patient,
+      doctor_name: _doctors.find(d => d.id === payload.doctor_id)?.name || '',
+      shift_name: _shifts.find(s => s.id === payload.shift_id)?.name || ''
+    };
     _bookings.push(nb);
     broadcastEvent('booking_created', nb);
     return nb;
+  },
+
+  // --- STEP 4: ATOMIC SINGLE-SEQUENCE CHECK-IN ---
+  async checkinBooking(bookingId) {
+    const user = getSession();
+    if (!user || (user.role !== 'receptionist' && user.role !== 'admin')) {
+      throw new Error('Unauthorized: Only Receptionist and Admin can check in patients.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('checkin_booking', {
+        p_booking_id: bookingId,
+        p_user_id: user.id,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Check-in failed.');
+      broadcastEvent('booking_checkin', data.booking || { id: bookingId, token_number: data.token_number });
+      return data;
+    }
+    // Local fallback
+    const b = _bookings.find(x => x.id === bookingId);
+    if (!b) throw new Error('Booking not found');
+    if (b.status === 'checked_in' && b.token_number) {
+      return { success: true, already_checked_in: true, token_number: b.token_number, token_code: String(b.token_number), booking: b };
+    }
+    // Single numeric sequence per doctor, shift, date
+    const counterKey = `${b.doctor_id}_${b.shift_id}_${b.booking_date}`;
+    if (_dailyCounters[counterKey] === undefined) {
+      const issuedTokens = _bookings
+        .filter(x => x.doctor_id === b.doctor_id && x.shift_id === b.shift_id && x.booking_date === b.booking_date && x.token_number)
+        .map(x => x.token_number);
+      _dailyCounters[counterKey] = issuedTokens.length > 0 ? Math.max(...issuedTokens) : 0;
+    }
+    _dailyCounters[counterKey] += 1;
+    const nextToken = _dailyCounters[counterKey];
+
+    b.token_number = nextToken;
+    b.token_code = String(nextToken);
+    b.status = 'checked_in';
+    b.check_in_time = new Date().toISOString();
+    b.checked_in_at = b.check_in_time;
+    b.updated_at = b.check_in_time;
+    broadcastEvent('booking_checkin', b);
+    return { success: true, already_checked_in: false, token_number: nextToken, token_code: String(nextToken), checked_in_at: b.checked_in_at, booking: b };
+  },
+
+  async undoCheckinBooking(bookingId) {
+    const user = getSession();
+    if (!user || (user.role !== 'receptionist' && user.role !== 'admin')) {
+      throw new Error('Unauthorized: Receptionist or Admin role required.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('undo_checkin_booking', {
+        p_booking_id: bookingId,
+        p_user_id: user.id,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Undo check-in failed.');
+      broadcastEvent('booking_undo_checkin', { id: bookingId });
+      return data;
+    }
+    const b = _bookings.find(x => x.id === bookingId);
+    if (b) {
+      b.status = 'pending';
+      // Token stays voided in history, never reused
+      broadcastEvent('booking_undo_checkin', { id: bookingId });
+    }
+    return { success: true };
+  },
+
+  async reprintToken(bookingId) {
+    const user = getSession();
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('reprint_token', {
+        p_booking_id: bookingId,
+        p_user_id: user?.id,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const b = _bookings.find(x => x.id === bookingId);
+    if (!b) throw new Error('Booking not found');
+    b.reprinted_count = (b.reprinted_count || 0) + 1;
+    return { success: true, token_number: b.token_number };
+  },
+
+  // --- STEP 3: RECEPTION DASHBOARD HELPERS ---
+  async getDoctorWorkload(dateStr = todayDateString()) {
+    const doctors = await this.getDoctors();
+    let bookings = [];
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase.from('bookings').select('doctor_id, status, deleted_at').eq('booking_date', dateStr).is('deleted_at', null);
+      if (data) bookings = data;
+    } else {
+      bookings = _bookings.filter(b => b.booking_date === dateStr && !b.deleted_at);
+    }
+    return doctors.map(doc => {
+      const docBookings = bookings.filter(b => b.doctor_id === doc.id && b.status !== 'cancelled');
+      const pendingCount = docBookings.filter(b => b.status === 'pending').length;
+      const checkedInCount = docBookings.filter(b => b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed').length;
+      return {
+        id: doc.id,
+        name: doc.name,
+        specialty: doc.specialty,
+        avatar_url: doc.avatar_url,
+        total_bookings: docBookings.length,
+        pending_count: pendingCount,
+        checked_in_count: checkedInCount,
+        last_updated: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      };
+    });
+  },
+
+  async getReceptionBookings(doctorId, dateStr = todayDateString(), statusFilter = 'pending') {
+    if (isSupabaseConfigured && supabase) {
+      let q = supabase.from('bookings')
+        .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name)')
+        .eq('booking_date', dateStr)
+        .is('deleted_at', null);
+      if (doctorId) q = q.eq('doctor_id', doctorId);
+      if (statusFilter === 'pending') {
+        q = q.eq('status', 'pending').order('slot_index');
+      } else if (statusFilter === 'checked_in') {
+        q = q.in('status', ['checked_in', 'in_process', 'completed']).order('token_number', { ascending: true, nullsFirst: false });
+      }
+      const { data, error } = await q;
+      if (!error && data) {
+        return data.map(b => ({ ...b, doctor_name: b.doctor?.name, shift_name: b.shift?.name }));
+      }
+    }
+    let all = _bookings.filter(b => b.booking_date === dateStr && !b.deleted_at && b.status !== 'cancelled');
+    if (doctorId) all = all.filter(b => b.doctor_id === doctorId);
+    if (statusFilter === 'pending') {
+      return all.filter(b => b.status === 'pending').sort((a, b) => a.slot_index - b.slot_index);
+    } else if (statusFilter === 'checked_in') {
+      return all.filter(b => b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed')
+                .sort((a, b) => (a.token_number || 0) - (b.token_number || 0));
+    }
+    return all;
+  },
+
+  async searchReceptionBookings(searchQuery, dateStr = todayDateString()) {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return [];
+    if (isSupabaseConfigured && supabase) {
+      const isNum = /^\d+$/.test(q);
+      let query = supabase.from('bookings')
+        .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name)')
+        .eq('booking_date', dateStr)
+        .is('deleted_at', null);
+      if (isNum) {
+        query = query.or(`token_number.eq.${parseInt(q, 10)},slot_index.eq.${parseInt(q, 10)}`);
+      }
+      const { data, error } = await query;
+      if (!error && data) {
+        return data.filter(b => {
+          if (isNum && (b.token_number === parseInt(q, 10) || b.slot_index === parseInt(q, 10))) return true;
+          const p = b.patient;
+          if (!p) return false;
+          return (p.first_name && p.first_name.toLowerCase().includes(q)) ||
+                 (p.last_name && p.last_name.toLowerCase().includes(q)) ||
+                 (p.full_phone && p.full_phone.includes(q)) ||
+                 (p.patient_mrn && p.patient_mrn.toLowerCase().includes(q));
+        }).map(b => ({ ...b, doctor_name: b.doctor?.name, shift_name: b.shift?.name }));
+      }
+    }
+    return _bookings.filter(b => {
+      if (b.booking_date !== dateStr || b.deleted_at) return false;
+      if (b.token_number && String(b.token_number) === q) return true;
+      const p = b.patient;
+      if (!p) return false;
+      return (p.first_name && p.first_name.toLowerCase().includes(q)) ||
+             (p.last_name && p.last_name.toLowerCase().includes(q)) ||
+             (p.full_phone && p.full_phone.includes(q)) ||
+             (p.patient_mrn && p.patient_mrn.toLowerCase().includes(q));
+    });
   },
 
   async updateBookingStatus(bookingId, status, userId, username, reason) {
@@ -616,13 +881,58 @@ export const api = {
 
   async getReportTokens(startDate, endDate, doctorId) {
     if (isSupabaseConfigured && supabase) {
-      const { data } = await supabase.rpc('report_tokens_summary', { p_start_date: startDate, p_end_date: endDate, p_doctor_id: doctorId || null });
-      if (data) return data;
+      try {
+        const { data } = await supabase.rpc('report_tokens_summary', { p_start_date: startDate, p_end_date: endDate, p_doctor_id: doctorId || null });
+        if (data && data.dailyTokens) return data;
+      } catch (e) { console.warn(e); }
     }
     const f = _bookings.filter(b => b.booking_date >= startDate && b.booking_date <= endDate && (!doctorId || b.doctor_id === doctorId) && !b.deleted_at);
     const dm = new Map();
-    for (const b of f) { if (!dm.has(b.booking_date)) dm.set(b.booking_date, { date: b.booking_date, total_tokens: 0, appointment_tokens: 0, walkin_tokens: 0, reprint_count: 0, cancelled_tokens: 0 }); const r = dm.get(b.booking_date); r.total_tokens++; if (b.reservation_type === 'Appointment') r.appointment_tokens++; if (b.reservation_type === 'Walk-in') r.walkin_tokens++; r.reprint_count += b.reprinted_count || 0; if (b.status === 'cancelled') r.cancelled_tokens++; }
-    return { totalTokensIssued: f.length, appointmentTokens: f.filter(b => b.reservation_type === 'Appointment').length, walkinTokens: f.filter(b => b.reservation_type === 'Walk-in').length, totalReprints: f.reduce((a, b) => a + (b.reprinted_count || 0), 0), cancelledTokens: f.filter(b => b.status === 'cancelled').length, dailyTokens: Array.from(dm.values()).sort((a, b) => a.date.localeCompare(b.date)) };
+    let totalWaitMins = 0;
+    let waitCount = 0;
+
+    for (const b of f) {
+      if (!dm.has(b.booking_date)) {
+        dm.set(b.booking_date, { date: b.booking_date, total_tokens: 0, reprint_count: 0, voided_tokens: 0, total_wait: 0, wait_count: 0 });
+      }
+      const r = dm.get(b.booking_date);
+      if (b.token_number) {
+        r.total_tokens++;
+        if (b.slot_time && b.checked_in_at) {
+          try {
+            const [sh, sm] = b.slot_time.split(':').map(Number);
+            const cin = new Date(b.checked_in_at);
+            const slotMins = sh * 60 + sm;
+            const cinMins = cin.getHours() * 60 + cin.getMinutes();
+            const diff = Math.max(0, cinMins - slotMins);
+            r.total_wait += diff;
+            r.wait_count++;
+            totalWaitMins += diff;
+            waitCount++;
+          } catch {}
+        }
+      }
+      r.reprint_count += b.reprinted_count || 0;
+      if (b.status === 'cancelled' || b.status === 'absent') r.voided_tokens++;
+    }
+
+    const tokenedList = f.filter(b => b.token_number);
+    const avgOverall = waitCount > 0 ? `${Math.round(totalWaitMins / waitCount)} mins` : '—';
+    const dailyTokens = Array.from(dm.values()).map(d => ({
+      date: d.date,
+      total_tokens: d.total_tokens,
+      reprint_count: d.reprint_count,
+      voided_tokens: d.voided_tokens,
+      avg_wait: d.wait_count > 0 ? `${Math.round(d.total_wait / d.wait_count)} mins` : '—',
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      totalTokensIssued: tokenedList.length,
+      totalReprints: f.reduce((a, b) => a + (b.reprinted_count || 0), 0),
+      voidedTokens: f.filter(b => b.status === 'cancelled' || b.status === 'absent').length,
+      avgWaitTime: avgOverall,
+      dailyTokens
+    };
   },
 
   async getReportAbsentAndFollowup(startDate, endDate, doctorId, filterType = 'all') {
@@ -647,6 +957,9 @@ export const api = {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, p => onBookingChange({ event: p.eventType === 'INSERT' ? 'booking_created' : p.eventType === 'UPDATE' ? 'booking_updated' : 'booking_deleted', record: p.new || p.old }))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'waiting_list' }, p => onBookingChange({ event: 'waiting_list_change', record: p.new || p.old }))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, p => onBookingChange({ event: 'patient_change', record: p.new || p.old }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'doctors' }, p => onBookingChange({ event: 'doctor_change', record: p.new || p.old }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, p => onBookingChange({ event: 'shift_change', record: p.new || p.old }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_token_counters' }, p => onBookingChange({ event: 'token_counter_change', record: p.new || p.old }))
         .subscribe(status => {
           if (status === 'SUBSCRIBED') onStatusChange?.('connected');
           else if (status === 'CLOSED') onStatusChange?.('disconnected');

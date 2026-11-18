@@ -50,6 +50,10 @@ async function init() {
   updateHeaderDate();
   $('hdr-username').textContent = user.full_name || user.username;
   $('hdr-role-label').textContent = `Role: ${user.role.toUpperCase()}`;
+  if (user.role === 'operator') {
+    $('hdr-reception-link')?.remove();
+    $('menu-reception-link')?.remove();
+  }
   if (user.role !== 'admin') {
     const ul = $('menu-users-link'); if (ul) ul.style.display = 'none';
     const sl = $('menu-settings-link'); if (sl) sl.style.display = 'none';
@@ -387,7 +391,7 @@ function renderBookingTable() {
           ${p.city ? `<span>📍 ${p.city}${p.area ? ' ' + p.area : ''}</span>` : ''}
           ${p.age ? `<span>🎂 ${p.age} yr</span>` : ''}
           ${p.cnic ? `<span style="color:#9ca3af;">🆔 ${p.cnic}</span>` : ''}
-          <span style="font-weight:600;color:#1e40af;">[${b.token_code}]</span>
+          ${b.token_number ? `<span style="font-weight:700;color:#1e40af;background:#dbeafe;padding:1px 6px;border-radius:4px;">Token #${b.token_number}</span>` : '<span style="font-size:.75rem;color:#9ca3af;">(No token yet)</span>'}
         </div>
       </td>
       <td><span class="source-badge badge badge--blue" style="background:#eff6ff;color:#1d4ed8;">${b.source || '—'}</span></td>
@@ -607,11 +611,8 @@ async function confirmBooking() {
 
     const booking = await api.createBookingAtomic(payload);
     closeQuickBook();
-    showToast(`✅ Token ${booking.token_code} issued successfully!`, 'success');
+    showToast('✅ Slot reserved successfully! Token will be issued upon patient check-in.', 'success');
     await loadBookings();
-    if (confirm(`Booking created for ${booking.token_code}. Print token slip now?`)) {
-      printToken(booking);
-    }
   } catch (e) {
     errEl.textContent = e.message || 'Booking failed. Please try again.';
     errEl.classList.remove('hidden');
@@ -621,9 +622,17 @@ async function confirmBooking() {
   }
 }
 
-// --- Status Update ---
+// --- Status Update & Step 4 Atomic Check-in ---
 async function updateStatus(bookingId, status) {
   try {
+    if (status === 'checked_in') {
+      const res = await api.checkinBooking(bookingId);
+      showToast(`✅ Patient Checked In! Token #${res.token_number} issued.`, 'success');
+      await loadBookings();
+      // Auto-print token slip
+      printToken({ id: bookingId, token_number: res.token_number });
+      return;
+    }
     await api.updateBookingStatus(bookingId, status, user.id, user.username);
     showToast(`Status updated to ${getStatusLabel(status)}`, 'success');
     await loadBookings();
@@ -894,12 +903,22 @@ async function renderAnalytics() {
 }
 
 // --- Realtime Callback ---
-function onRealtimeEvent({ event, record }) {
+async function onRealtimeEvent({ event, record }) {
+  if (event === 'doctor_change' || event === 'shift_change') {
+    const prevVal = $('doctor-shift-select')?.value;
+    await loadDoctorsAndShifts();
+    if (prevVal && $('doctor-shift-select')?.querySelector(`option[value="${prevVal}"]`)) {
+      $('doctor-shift-select').value = prevVal;
+      onDoctorShiftChange();
+    }
+    showToast('Doctors/shifts configuration updated in real time.', 'info');
+    return;
+  }
   if (!currentDoctor || !currentShift) return;
-  if (event === 'tab_visible' || event === 'booking_created' || event === 'booking_updated' || event === 'booking_deleted' || event === 'waiting_list_change') {
+  if (event === 'tab_visible' || event === 'booking_created' || event === 'booking_updated' || event === 'booking_deleted' || event === 'waiting_list_change' || event === 'booking_checkin' || event === 'booking_undo_checkin') {
     loadBookings();
     if (event === 'booking_created' && record?.created_by !== user.id) {
-      showToast(`📢 New booking received: ${record?.token_code || ''}`, 'info');
+      showToast('📢 New booking received.', 'info');
     }
   }
 }

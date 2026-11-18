@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- PATIENT BOOKING REGISTER (HIMS FRONT-DESK)
 -- Migration 000001: Initial Core Schema, RLS, Roles, and Auth Triggers
 -- Timezone Anchored: Asia/Karachi (UTC+5)
@@ -1380,11 +1380,11 @@ INSERT INTO public.clinic_settings (key_name, value_json)
 VALUES (
     'clinic_info',
     jsonb_build_object(
-        'name', 'Dr Naeem Eye Laser & Retina Center',
-        'tagline', 'Real-time schedule and patient coordination center',
+        'name', 'Bariatric Surgery Clinic',
+        'tagline', 'Advanced Bariatric, Laparoscopic & Metabolic Surgery Center',
         'phone', '+92-91-5840000',
         'address', 'Khyber Medical Centre, Dabgari Gardens, Peshawar',
-        'website', 'www.drnaeemcenter.com',
+        'website', 'www.bariatricsurgery.com.pk',
         'emergency_phone', '+92-300-5900000'
     )
 )
@@ -1446,9 +1446,9 @@ ON CONFLICT (role_name, permission_key) DO NOTHING;
 -- ------------------------------------------------------------------------------
 INSERT INTO public.user_profiles (id, username, full_name, email, role, status, must_change_password, password_hash)
 VALUES
-    ('11111111-1111-1111-1111-111111111111', 'admin', 'System Administrator', 'admin@drnaeemcenter.com', 'admin', 'active', false, crypt('admin123', gen_salt('bf'))),
-    ('22222222-2222-2222-2222-222222222222', 'operator', 'Lead Operator Ali', 'ali.operator@drnaeemcenter.com', 'operator', 'active', false, crypt('operator123', gen_salt('bf'))),
-    ('33333333-3333-3333-3333-333333333333', 'receptionist', 'Front Desk Sara', 'sara.reception@drnaeemcenter.com', 'receptionist', 'active', false, crypt('reception123', gen_salt('bf')))
+    ('11111111-1111-1111-1111-111111111111', 'admin', 'System Administrator', 'admin@bariatricclinic.com', 'admin', 'active', false, crypt('admin123', gen_salt('bf'))),
+    ('22222222-2222-2222-2222-222222222222', 'operator', 'Lead Operator Ali', 'ali.operator@bariatricclinic.com', 'operator', 'active', false, crypt('operator123', gen_salt('bf'))),
+    ('33333333-3333-3333-3333-333333333333', 'receptionist', 'Front Desk Sara', 'sara.reception@bariatricclinic.com', 'receptionist', 'active', false, crypt('reception123', gen_salt('bf')))
 ON CONFLICT (username) DO NOTHING;
 
 -- ------------------------------------------------------------------------------
@@ -1456,8 +1456,8 @@ ON CONFLICT (username) DO NOTHING;
 -- ------------------------------------------------------------------------------
 INSERT INTO public.doctors (id, name, specialty, phone, is_active, sort_order)
 VALUES
-    ('d1111111-1111-1111-1111-111111111111', 'Dr Naeem Khattak', 'Consultant Eye Surgeon & Retina Specialist', '+923005901111', true, 1),
-    ('d2222222-2222-2222-2222-222222222222', 'Dr Zarin Khan', 'Consultant Physician & Internal Medicine', '+923005902222', true, 2)
+    ('d1111111-1111-1111-1111-111111111111', 'Dr Zarin Khan', 'Consultant Laparoscopic & Bariatric Surgeon', '+923005901111', true, 1),
+    ('d2222222-2222-2222-2222-222222222222', 'Dr Tariq Shah', 'Consultant Laparoscopic & General Surgeon', '+923005902222', true, 2)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.shifts (id, doctor_id, name, start_time, end_time, slot_duration_minutes, is_active, sort_order)
@@ -1566,7 +1566,7 @@ DECLARE
     v_mrn TEXT;
     
     first_names TEXT[] := ARRAY['Ahmed', 'Fatima', 'Usman', 'Ayesha', 'Bilal', 'Zainab', 'Tariq', 'Maryam', 'Hamza', 'Sana', 'Kashif', 'Hina', 'Rashid', 'Farah', 'Imran', 'Nazia', 'Junaid', 'Sadia', 'Waleed', 'Bushra'];
-    last_names TEXT[] := ARRAY['Khan', 'Afridi', 'Khattak', 'Shah', 'Qureshi', 'Malik', 'Rehman', 'Jan', 'Yousafzai', 'Shinwari', 'Mohmand', 'Bangash', 'Durrani', 'Bibi', 'Sultana'];
+    last_names TEXT[] := ARRAY['Khan', 'Afridi', 'Ahmad', 'Shah', 'Qureshi', 'Malik', 'Rehman', 'Jan', 'Yousafzai', 'Shinwari', 'Mohmand', 'Bangash', 'Durrani', 'Bibi', 'Sultana'];
     sources TEXT[] := ARRAY['Self', 'Facebook', 'TikTok', 'Instagram', 'YouTube', 'Website', 'WhatsApp', 'Referral', 'Phone call'];
     purposes TEXT[] := ARRAY['Consultation', 'Follow Up', 'Procedure', 'Report Review'];
     areas TEXT[] := ARRAY['Hayatabad Phase 1', 'Hayatabad Phase 2', 'University Town', 'Kohat Road Peshawar', 'Saddar', 'Warsak Road', 'Ring Road'];

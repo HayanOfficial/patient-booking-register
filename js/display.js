@@ -62,10 +62,15 @@ async function loadQueue() {
   try {
     const bookings = await api.getBookingsForShiftAndDate(currentDate, currentDoctor.id, currentShift.id);
 
+    // Queue order = token order
+    const tokenedBookings = bookings
+      .filter(b => b.token_number && !b.deleted_at && b.status !== 'cancelled')
+      .sort((a, b) => (a.token_number || 0) - (b.token_number || 0));
+
     // Active in process
-    const inProcess = bookings.find(b => b.status === 'in_process');
+    const inProcess = tokenedBookings.find(b => b.status === 'in_process');
     if (inProcess) {
-      $('calling-token').textContent = inProcess.token_code;
+      $('calling-token').textContent = `Token #${inProcess.token_number}`;
       $('calling-name').textContent = inProcess.patient ? `${inProcess.patient.first_name} ${inProcess.patient.last_name || ''}` : 'Patient';
       $('calling-info').textContent = `Slot: ${inProcess.slot_time_formatted || inProcess.slot_time} • ${inProcess.purpose}`;
     } else {
@@ -74,11 +79,11 @@ async function loadQueue() {
       $('calling-info').textContent = 'No patient currently inside consultation';
     }
 
-    // Checked in (next in queue)
-    const checkedInList = bookings.filter(b => b.status === 'checked_in');
+    // Checked in (next in queue by token order)
+    const checkedInList = tokenedBookings.filter(b => b.status === 'checked_in');
     if (checkedInList.length > 0) {
       const nextPat = checkedInList[0];
-      $('next-token').textContent = nextPat.token_code;
+      $('next-token').textContent = `Token #${nextPat.token_number}`;
       $('next-name').textContent = nextPat.patient ? `${nextPat.patient.first_name} ${nextPat.patient.last_name || ''}` : 'Patient';
       $('next-info').textContent = `Slot: ${nextPat.slot_time_formatted || nextPat.slot_time} • Checked in`;
     } else {
@@ -87,21 +92,17 @@ async function loadQueue() {
       $('next-info').textContent = 'Waiting for arrivals';
     }
 
-    // Pending / Checked in remaining tokens
-    const waitingList = bookings.filter(b => b.status === 'checked_in' || b.status === 'pending');
+    // Waiting queue tokens (all checked-in awaiting doctor)
     const grid = $('waiting-grid');
-    if (waitingList.length === 0) {
-      grid.innerHTML = '<div class="waiting-item" style="color:#64748b;">No active tokens in queue</div>';
+    if (checkedInList.length === 0) {
+      grid.innerHTML = '<div class="waiting-item" style="color:#64748b;">No queue</div>';
     } else {
-      grid.innerHTML = waitingList.map(b => {
-        const isChecked = b.status === 'checked_in';
-        return `
-          <div class="waiting-item" style="${isChecked ? 'border: 2px solid #10b981; color:#10b981;' : 'color:#cbd5e1;'}">
-            <div style="font-size:1.8rem;">${b.token_code}</div>
-            <div style="font-size:.7rem;margin-top:2px;color:#94a3b8;">${b.slot_time_formatted || b.slot_time}</div>
-          </div>
-        `;
-      }).join('');
+      grid.innerHTML = checkedInList.map(b => `
+        <div class="waiting-item" style="border: 2px solid #10b981; color:#10b981; min-width:90px; text-align:center;">
+          <div style="font-size:1.8rem; font-weight:800;">#${b.token_number}</div>
+          <div style="font-size:.7rem;margin-top:2px;color:#94a3b8;">${b.slot_time_formatted || b.slot_time}</div>
+        </div>
+      `).join('');
     }
   } catch (err) {
     console.error('Queue load error:', err);

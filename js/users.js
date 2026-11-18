@@ -54,7 +54,7 @@ function renderUsersTable() {
   }
 
   tbody.innerHTML = allUsers.map(u => {
-    const roleBadge = u.role === 'admin' ? 'badge--amber' : u.role === 'receptionist' ? 'badge--green' : 'badge--blue';
+    const roleBadge = u.role === 'admin' ? 'badge--amber' : u.role === 'receptionist' ? 'badge--green' : u.role === 'counselor' ? 'badge--teal' : 'badge--blue';
     const statusBadge = u.status === 'active' ? 'badge--green' : 'badge--red';
     const isSelf = u.id === currentUser.id;
 

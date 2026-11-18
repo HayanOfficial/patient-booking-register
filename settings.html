@@ -36,6 +36,7 @@
       <button class="settings-nav-btn active" data-tab="clinic">🏥 Clinic Profile</button>
       <button class="settings-nav-btn" data-tab="doctors">👨‍⚕️ Doctors</button>
       <button class="settings-nav-btn" data-tab="shifts">⏰ Shifts &amp; Timing</button>
+      <button class="settings-nav-btn" data-tab="procedures">🩺 Procedures</button>
       <button class="settings-nav-btn" data-tab="lookups">🏷️ Lookups &amp; Dropdowns</button>
       <button class="settings-nav-btn" data-tab="audit">📜 System Audit Log</button>
     </aside>
@@ -115,7 +116,23 @@
         </div>
       </div>
 
-      <!-- 4. Lookups -->
+      <!-- 4. Procedures -->
+      <div class="settings-panel" id="panel-procedures">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h2 style="font-size:1.1rem;font-weight:700;">Clinical Procedures Catalog</h2>
+          <button class="btn btn--primary btn--sm" id="add-proc-btn">+ Add Procedure</button>
+        </div>
+        <div class="card">
+          <table class="booking-table" id="procedures-table">
+            <thead>
+              <tr><th>Procedure Name</th><th>Category</th><th>Order</th><th>Status</th><th style="width:120px;">Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. Lookups -->
       <div class="settings-panel" id="panel-lookups">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
           <div style="display:flex;gap:10px;align-items:center;">
@@ -274,10 +291,63 @@
           <label class="form-label">Color / Badge</label>
           <input class="form-input" type="color" id="lkp-color" value="#3B82F6" />
         </div>
+        <div class="form-group" id="lkp-counseling-wrap" style="display:none;margin-top:10px;">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="lkp-requires-counseling" />
+            Requires Counseling Session
+          </label>
+          <span class="text-muted text-xs">Patients checking in with this purpose will be queued for counseling automatically.</span>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn--secondary" onclick="document.getElementById('lookup-modal').classList.remove('open')">Cancel</button>
         <button class="btn btn--primary" id="save-lookup-btn">Save Item</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Procedure Add/Edit -->
+  <div class="modal-overlay" id="procedure-modal">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-header">
+        <div class="modal-title">Clinical Procedure</div>
+        <button class="modal-close" onclick="document.getElementById('procedure-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="proc-edit-id" />
+        <div class="form-group">
+          <label class="form-label">Procedure Name <span class="required">*</span></label>
+          <input class="form-input" type="text" id="proc-edit-name" placeholder="e.g. Sleeve Gastrectomy" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input class="form-input" type="text" id="proc-edit-category" placeholder="e.g. Bariatric Surgery" list="proc-categories-datalist" />
+          <datalist id="proc-categories-datalist">
+            <option value="Bariatric Surgery">
+            <option value="Laparoscopic Surgery">
+            <option value="Pre-op Workup">
+            <option value="Post-op Care">
+            <option value="Endoscopy">
+            <option value="Consultation">
+          </datalist>
+        </div>
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label">Sort Order</label>
+            <input class="form-input" type="number" id="proc-edit-order" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-select" id="proc-edit-active">
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="document.getElementById('procedure-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn--primary" id="save-proc-btn">Save Procedure</button>
       </div>
     </div>
   </div>

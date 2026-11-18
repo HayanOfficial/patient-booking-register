@@ -308,12 +308,21 @@ function renderCheckinTable(bookings) {
     if (b.status === 'pending') {
       actionCell = `<button class="btn-checkin-action" data-checkin-id="${b.id}">➔ Check-in</button>`;
     } else {
+      const counselBadge = b.counseling_status === 'waiting'
+        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--waiting">⏳ Waiting for Counseling</span></div>'
+        : b.counseling_status === 'in_counseling'
+        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--in_counseling">💬 In Counseling</span></div>'
+        : b.counseling_status === 'done'
+        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--done">✅ Counseling Done</span></div>'
+        : '';
+
       actionCell = `
         <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
           <span style="font-weight:800;color:#1e3a8a;background:#dbeafe;padding:2px 8px;border-radius:4px;font-size:.85rem;">Token #${b.token_number || b.token_code}</span>
           <button class="btn btn--secondary btn--sm" data-undo-id="${b.id}" title="Undo check-in (voids token)">↩</button>
         </div>
         <div style="font-size:.7rem;color:#059669;margin-top:2px;text-align:center;">In: ${formatTimestamp(b.checked_in_at || b.check_in_time)}</div>
+        ${counselBadge}
       `;
     }
 

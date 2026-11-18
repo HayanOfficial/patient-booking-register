@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Counseling Dashboard</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body style="background:#f1f5f9; min-height:100vh;">
+
+  <!-- Header Banner -->
+  <header class="reception-header-banner" style="background:linear-gradient(135deg,#059669 0%,#047857 60%,#065f46 100%);">
+    <div class="reception-title-group">
+      <h1>Counseling Dashboard</h1>
+      <div class="reception-subtitle-pills">
+        <span class="reception-pill" id="hdr-clinic-name-pill">🏥 Bariatric Surgery Clinic</span>
+        <span class="reception-pill" id="hdr-current-date">📅 <span id="hdr-date-text">Loading...</span></span>
+        <span class="reception-pill" id="hdr-updated-time">🕒 Updated: <span id="hdr-time-text">--:--:--</span></span>
+        <span id="realtime-indicator" class="realtime-indicator realtime-indicator--connected" style="font-size:.75rem;padding:2px 8px;">● Live</span>
+      </div>
+    </div>
+    <div class="reception-header-actions">
+      <!-- Doctor filter -->
+      <select id="filter-doctor" class="form-select form-select--sm" style="min-width:180px;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3);">
+        <option value="">All Doctors</option>
+      </select>
+      <!-- User menu -->
+      <div class="dropdown">
+        <button class="btn btn--ghost btn--sm" id="user-menu-btn" style="color:#ffffff;">
+          👤 <span id="hdr-username">Counselor</span> ▾
+        </button>
+        <div class="dropdown-menu" id="user-menu">
+          <button class="dropdown-item dropdown-item--danger" id="logout-btn">🚪 Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Area -->
+  <main class="reception-content-area">
+
+    <!-- Stat Cards -->
+    <div class="counsel-stat-row" id="stat-cards">
+      <div class="counsel-stat-card counsel-stat-card--waiting">
+        <div class="counsel-stat-number" id="stat-waiting">0</div>
+        <div class="counsel-stat-label">⏳ Waiting</div>
+      </div>
+      <div class="counsel-stat-card counsel-stat-card--active">
+        <div class="counsel-stat-number" id="stat-active">0</div>
+        <div class="counsel-stat-label">💬 In Counseling</div>
+      </div>
+      <div class="counsel-stat-card counsel-stat-card--done">
+        <div class="counsel-stat-number" id="stat-done">0</div>
+        <div class="counsel-stat-label">✅ Done</div>
+      </div>
+      <div class="counsel-stat-card counsel-stat-card--total">
+        <div class="counsel-stat-number" id="stat-total">0</div>
+        <div class="counsel-stat-label">📋 Total Today</div>
+      </div>
+    </div>
+
+    <!-- Search & Tabs -->
+    <div class="card" style="margin-bottom:16px;padding:16px;">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <div class="search-input-wrap" style="flex:1;min-width:260px;">
+          <input type="text" id="search-input" placeholder="Search by token, name, phone, patient ID..." />
+          <button class="btn btn--primary btn--sm" id="search-btn">🔍 Search</button>
+          <button class="btn btn--secondary btn--sm hidden" id="search-clear">Clear</button>
+        </div>
+      </div>
+      <!-- Tabs -->
+      <div class="counsel-tabs">
+        <button class="counsel-tab active" data-tab="waiting">
+          ⏳ Waiting <span class="counsel-tab-badge" id="tab-badge-waiting">0</span>
+        </button>
+        <button class="counsel-tab" data-tab="in_counseling">
+          💬 In Counseling <span class="counsel-tab-badge counsel-tab-badge--active" id="tab-badge-in_counseling">0</span>
+        </button>
+        <button class="counsel-tab" data-tab="done">
+          ✅ Done <span class="counsel-tab-badge counsel-tab-badge--done" id="tab-badge-done">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Patient Table -->
+    <div class="card" style="overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="counseling-table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Patient</th>
+              <th>Doctor</th>
+              <th>Source / Purpose</th>
+              <th>Check-in Time</th>
+              <th>Wait</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="counseling-tbody">
+            <tr><td colspan="7" class="text-muted" style="text-align:center;padding:32px;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ============================================================
+       COUNSELING PANEL (slide-in from right)
+       ============================================================ -->
+  <div id="counsel-panel-backdrop" class="counsel-panel-backdrop hidden"></div>
+  <aside id="counsel-panel" class="counsel-panel hidden">
+    <!-- Panel Header -->
+    <div class="counsel-panel-header">
+      <div>
+        <h2 class="counsel-panel-title">Counseling Session</h2>
+        <div class="counsel-panel-subtitle" id="cp-patient-info">—</div>
+      </div>
+      <button class="btn btn--ghost btn--sm" id="cp-close-btn" title="Close">✕</button>
+    </div>
+
+    <!-- Patient Summary Bar -->
+    <div class="counsel-patient-summary" id="cp-summary">
+      <div class="counsel-summary-item"><span class="counsel-summary-label">Token</span><strong id="cp-token">—</strong></div>
+      <div class="counsel-summary-item"><span class="counsel-summary-label">Doctor</span><span id="cp-doctor">—</span></div>
+      <div class="counsel-summary-item"><span class="counsel-summary-label">Purpose</span><span id="cp-purpose">—</span></div>
+      <div class="counsel-summary-item"><span class="counsel-summary-label">Status</span><span id="cp-status-badge">—</span></div>
+    </div>
+
+    <!-- Panel Body: Procedures -->
+    <div class="counsel-panel-body">
+
+      <!-- Procedure Search + List -->
+      <div class="counsel-proc-search-wrap">
+        <input type="text" id="proc-search-input" placeholder="🔍 Search procedures..." />
+      </div>
+
+      <div class="counsel-proc-list" id="proc-list">
+        <!-- Checkboxes loaded here -->
+        <div class="text-muted" style="padding:12px;text-align:center;">Loading procedures...</div>
+      </div>
+
+      <!-- Selected Procedures with Prices -->
+      <div id="selected-procs-section" style="margin-top:16px;">
+        <h4 style="font-size:.85rem;font-weight:600;color:var(--gray-700);margin-bottom:8px;">Selected Procedures & Prices</h4>
+        <div id="selected-proc-list">
+          <div class="text-muted" style="font-size:.8rem;">No procedures selected yet.</div>
+        </div>
+        <!-- Running Total -->
+        <div class="counsel-total-row" id="counsel-total-row" style="display:none;">
+          <span>Total Quoted Price</span>
+          <strong id="counsel-total-amount">Rs 0</strong>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label" for="counsel-notes">Counselor Notes (optional)</label>
+        <textarea id="counsel-notes" class="form-input" rows="3" placeholder="Notes visible to Admin and Counselor only..."></textarea>
+      </div>
+
+    </div>
+
+    <!-- Panel Footer -->
+    <div class="counsel-panel-footer">
+      <button class="btn btn--secondary" id="cp-undo-btn" style="margin-right:auto;" title="Undo check-in (back to Waiting)">↩ Undo</button>
+      <button class="btn btn--outline" id="cp-save-draft-btn">💾 Save Draft</button>
+      <button class="btn btn--success" id="cp-complete-btn">✅ Complete &amp; Print</button>
+    </div>
+  </aside>
+
+  <script type="module" src="./js/counseling.js"></script>
+</body>
+</html>

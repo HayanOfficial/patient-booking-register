@@ -120,6 +120,14 @@ const operatorUser = {
   status: 'active'
 };
 
+const counselorUser = {
+  id: '44444444-4444-4444-4444-444444444444',
+  username: 'counselor',
+  full_name: 'Lead Counselor Ayesha',
+  role: 'counselor',
+  status: 'active'
+};
+
 // ------------------------------------------------------------------------------
 // TEST 2: Only Admin can add/delete doctors and shifts (RLS / Auth check)
 // ------------------------------------------------------------------------------
@@ -374,6 +382,218 @@ await runAsyncTest('20 parallel check-ins give unique consecutive numbers 1..20'
   const sorted = [...tokens].sort((a, b) => a - b);
   const expected = Array.from({ length: 20 }, (_, i) => i + 1);
   assert.deepStrictEqual(sorted, expected, 'Tokens must form consecutive sequence 1 through 20');
+});
+
+// ------------------------------------------------------------------------------
+// TEST 8: Check-in creates counseling session only for purposes that require counseling
+// ------------------------------------------------------------------------------
+await runAsyncTest('Check-in creates counseling session only for purposes requiring counseling', async () => {
+  saveSession(adminUser);
+  const testDate = '2026-11-25';
+
+  // Booking with purpose = Consultation (requires counseling)
+  const b1 = await api.createBookingAtomic({
+    doctor_id: 'doc-counsel-test', shift_id: 'shift-counsel-test', booking_date: testDate,
+    purpose: 'Consultation', first_name: 'Patient-Needs-Counseling'
+  });
+
+  // Booking with purpose = Emergency (does not require counseling)
+  const b2 = await api.createBookingAtomic({
+    doctor_id: 'doc-counsel-test', shift_id: 'shift-counsel-test', booking_date: testDate,
+    purpose: 'Emergency', first_name: 'Patient-No-Counseling'
+  });
+
+  // Check in both bookings as receptionist
+  saveSession(receptionistUser);
+  await api.checkinBooking(b1.id);
+  await api.checkinBooking(b2.id);
+
+  // Counselor checks the queue
+  saveSession(counselorUser);
+  const queue = await api.getCounselingQueue(testDate);
+  const inQueue1 = queue.some(q => q.booking_id === b1.id);
+  const inQueue2 = queue.some(q => q.booking_id === b2.id);
+
+  assert.strictEqual(inQueue1, true, 'Booking with Consultation must appear in counseling queue');
+  assert.strictEqual(inQueue2, false, 'Booking with Emergency must NOT appear in counseling queue');
+});
+
+// ------------------------------------------------------------------------------
+// TEST 9: Counselor can start counseling, Receptionist and Operator cannot
+// ------------------------------------------------------------------------------
+await runAsyncTest('Counselor can start counseling, Receptionist/Operator cannot', async () => {
+  saveSession(adminUser);
+  const testDate = '2026-11-26';
+  const booking = await api.createBookingAtomic({
+    doctor_id: 'doc-counsel-role', shift_id: 'shift-counsel-role', booking_date: testDate,
+    purpose: 'Consultation', first_name: 'Role-Test-Patient'
+  });
+
+  saveSession(receptionistUser);
+  await api.checkinBooking(booking.id);
+
+  // Operator tries to start counseling -> REJECTED
+  saveSession(operatorUser);
+  let opBlocked = false;
+  try {
+    await api.counselingCheckin(booking.id);
+  } catch (err) {
+    opBlocked = true;
+    assert.match(err.message, /Counselor or Admin/i);
+  }
+  assert.strictEqual(opBlocked, true, 'Operator must not be able to start counseling');
+
+  // Receptionist tries to start counseling -> REJECTED
+  saveSession(receptionistUser);
+  let recBlocked = false;
+  try {
+    await api.counselingCheckin(booking.id);
+  } catch (err) {
+    recBlocked = true;
+    assert.match(err.message, /Counselor or Admin/i);
+  }
+  assert.strictEqual(recBlocked, true, 'Receptionist must not be able to start counseling');
+
+  // Counselor tries -> SUCCESS
+  saveSession(counselorUser);
+  const res = await api.counselingCheckin(booking.id);
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.session.status, 'in_counseling');
+});
+
+// ------------------------------------------------------------------------------
+// TEST 10: Receptionist and Operator cannot read prices
+// ------------------------------------------------------------------------------
+await runAsyncTest('Receptionist and Operator cannot read quoted procedure prices', async () => {
+  saveSession(adminUser);
+  const testDate = '2026-11-27';
+  const booking = await api.createBookingAtomic({
+    doctor_id: 'doc-price-test', shift_id: 'shift-price-test', booking_date: testDate,
+    purpose: 'Consultation', first_name: 'Confidential-Prices'
+  });
+
+  saveSession(receptionistUser);
+  await api.checkinBooking(booking.id);
+
+  saveSession(counselorUser);
+  const checkinRes = await api.counselingCheckin(booking.id);
+  const sessionId = checkinRes.session.id;
+
+  // Counselor saves procedures with quoted prices
+  await api.saveCounseling(booking.id, [
+    { procedure_name_snapshot: 'Sleeve Gastrectomy', quoted_price: 350000, sort_order: 1 },
+    { procedure_name_snapshot: 'Pre-op Blood Tests', quoted_price: 25000, sort_order: 2 }
+  ], 'Counselor confidential notes', false);
+
+  // Operator attempts to fetch session detail with prices -> REJECTED
+  saveSession(operatorUser);
+  let opFailed = false;
+  try {
+    await api.getCounselingSessionDetail(sessionId);
+  } catch (err) {
+    opFailed = true;
+    assert.match(err.message, /confidential|Unauthorized/i);
+  }
+  assert.strictEqual(opFailed, true, 'Operator must not be allowed to read session prices');
+
+  // Receptionist attempts to fetch session detail with prices -> REJECTED
+  saveSession(receptionistUser);
+  let recFailed = false;
+  try {
+    await api.getCounselingSessionDetail(sessionId);
+  } catch (err) {
+    recFailed = true;
+    assert.match(err.message, /confidential|Unauthorized/i);
+  }
+  assert.strictEqual(recFailed, true, 'Receptionist must not be allowed to read session prices');
+
+  // Counselor CAN read detail with prices
+  saveSession(counselorUser);
+  const detail = await api.getCounselingSessionDetail(sessionId);
+  assert.strictEqual(detail.success, true);
+  assert.strictEqual(detail.procedures.length, 2);
+  assert.strictEqual(detail.procedures[0].quoted_price, 350000);
+});
+
+// ------------------------------------------------------------------------------
+// TEST 11: Saving procedures twice replaces list (no duplicates); price cannot be negative
+// ------------------------------------------------------------------------------
+await runAsyncTest('Saving procedures twice replaces list atomically, and negative price is rejected', async () => {
+  saveSession(adminUser);
+  const testDate = '2026-11-28';
+  const booking = await api.createBookingAtomic({
+    doctor_id: 'doc-replace-test', shift_id: 'shift-replace-test', booking_date: testDate,
+    purpose: 'Consultation', first_name: 'Atomic-Replace-Test'
+  });
+
+  saveSession(receptionistUser);
+  await api.checkinBooking(booking.id);
+
+  saveSession(counselorUser);
+  const start = await api.counselingCheckin(booking.id);
+  const sessionId = start.session.id;
+
+  // 1. Negative price must throw error
+  let negError = false;
+  try {
+    await api.saveCounseling(booking.id, [
+      { procedure_name_snapshot: 'Invalid Negative Price', quoted_price: -500 }
+    ], 'Note', false);
+  } catch (err) {
+    negError = true;
+    assert.match(err.message, /negative/i);
+  }
+  assert.strictEqual(negError, true, 'Negative price must be rejected');
+
+  // 2. Save 3 items
+  await api.saveCounseling(booking.id, [
+    { procedure_name_snapshot: 'Procedure A', quoted_price: 10000 },
+    { procedure_name_snapshot: 'Procedure B', quoted_price: 20000 },
+    { procedure_name_snapshot: 'Procedure C', quoted_price: 30000 },
+  ], 'First save', false);
+
+  let detail = await api.getCounselingSessionDetail(sessionId);
+  assert.strictEqual(detail.procedures.length, 3);
+
+  // 3. Save again with 1 item — must replace, NOT append to 4 items!
+  await api.saveCounseling(booking.id, [
+    { procedure_name_snapshot: 'Only Procedure X', quoted_price: 50000 }
+  ], 'Second save replacement', true);
+
+  detail = await api.getCounselingSessionDetail(sessionId);
+  assert.strictEqual(detail.procedures.length, 1, 'Procedures list must be replaced, not appended');
+  assert.strictEqual(detail.procedures[0].procedure_name_snapshot, 'Only Procedure X');
+  assert.strictEqual(detail.procedures[0].quoted_price, 50000);
+  assert.strictEqual(detail.session.status, 'done');
+});
+
+// ------------------------------------------------------------------------------
+// TEST 12: Procedure slip uses the exact same token number as reception check-in
+// ------------------------------------------------------------------------------
+await runAsyncTest('Procedure slip uses the exact same token number as reception check-in', async () => {
+  saveSession(adminUser);
+  const testDate = '2026-11-29';
+  const booking = await api.createBookingAtomic({
+    doctor_id: 'doc-slip-test', shift_id: 'shift-slip-test', booking_date: testDate,
+    purpose: 'Consultation', first_name: 'Slip-Token-Patient'
+  });
+
+  // Receptionist check-in generates token
+  saveSession(receptionistUser);
+  const checkinRes = await api.checkinBooking(booking.id);
+  const receptionToken = checkinRes.token_number;
+  assert.ok(receptionToken > 0);
+
+  // Counselor finishes counseling
+  saveSession(counselorUser);
+  const start = await api.counselingCheckin(booking.id);
+  await api.saveCounseling(booking.id, [
+    { procedure_name_snapshot: 'Gastric Bypass', quoted_price: 400000 }
+  ], 'Ready for slip', true);
+
+  // Fetch booking details for the slip
+  const slipData = await api.getBookingWithPatient(booking.id);
+  assert.strictEqual(slipData.token_number, receptionToken, 'Slip token number must match reception check-in token exactly');
 });
 
 console.log(`\n========================================`);

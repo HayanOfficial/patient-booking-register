@@ -32,7 +32,12 @@ export function requireAuth(allowedRoles = null) {
     return null;
   }
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    window.location.href = '/booking.html';
+    // Redirect to appropriate page instead of generic booking
+    if (user.role === 'counselor') {
+      window.location.href = '/counseling.html';
+    } else {
+      window.location.href = '/booking.html';
+    }
     return null;
   }
   return user;
@@ -44,6 +49,8 @@ export function redirectIfLoggedIn() {
   if (user) {
     if (user.role === 'admin' || user.role === 'receptionist') {
       window.location.href = './reception.html';
+    } else if (user.role === 'counselor') {
+      window.location.href = './counseling.html';
     } else {
       window.location.href = './booking.html';
     }

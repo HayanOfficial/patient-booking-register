@@ -170,6 +170,8 @@ let _users    = [
 ];
 let _auditLogs = [];
 let _dailyCounters = {};
+let _counselingSessions = [];
+let _counselingProcedures = [];
 
 // ---------------------------------------------------------------------------
 // API Object
@@ -528,6 +530,26 @@ export const api = {
     b.check_in_time = new Date().toISOString();
     b.checked_in_at = b.check_in_time;
     b.updated_at = b.check_in_time;
+
+    // Auto-create counseling session if purpose requires counseling
+    const purposeItem = _lookups.find(l => l.category === 'purpose' && l.name?.toLowerCase() === b.purpose?.toLowerCase());
+    const reqCounseling = purposeItem ? (purposeItem.requires_counseling !== false && (purposeItem.requires_counseling || purposeItem.name?.toLowerCase() === 'consultation')) : (b.purpose?.toLowerCase() === 'consultation');
+    if (reqCounseling) {
+      if (!_counselingSessions.find(cs => cs.booking_id === b.id)) {
+        _counselingSessions.push({
+          id: `cs-${b.id}`,
+          booking_id: b.id,
+          status: 'waiting',
+          counselor_id: null,
+          started_at: null,
+          completed_at: null,
+          notes: '',
+          created_at: new Date().toISOString()
+        });
+      }
+      b.counseling_status = 'waiting';
+    }
+
     broadcastEvent('booking_checkin', b);
     return { success: true, already_checked_in: false, token_number: nextToken, token_code: String(nextToken), checked_in_at: b.checked_in_at, booking: b };
   },
@@ -602,7 +624,7 @@ export const api = {
   async getReceptionBookings(doctorId, dateStr = todayDateString(), statusFilter = 'pending') {
     if (isSupabaseConfigured && supabase) {
       let q = supabase.from('bookings')
-        .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name)')
+        .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name), counseling:counseling_sessions(status)')
         .eq('booking_date', dateStr)
         .is('deleted_at', null);
       if (doctorId) q = q.eq('doctor_id', doctorId);
@@ -613,7 +635,12 @@ export const api = {
       }
       const { data, error } = await q;
       if (!error && data) {
-        return data.map(b => ({ ...b, doctor_name: b.doctor?.name, shift_name: b.shift?.name }));
+        return data.map(b => ({
+          ...b,
+          doctor_name: b.doctor?.name,
+          shift_name: b.shift?.name,
+          counseling_status: b.counseling?.[0]?.status || b.counseling?.status || null
+        }));
       }
     }
     let all = _bookings.filter(b => b.booking_date === dateStr && !b.deleted_at && b.status !== 'cancelled');
@@ -949,6 +976,269 @@ export const api = {
     }).map(b => ({ booking_id: b.id, booking_date: b.booking_date, token_code: b.token_code, slot_time_formatted: b.slot_time_formatted, status: b.status, purpose: b.purpose, source: b.source, remarks: b.remarks, patient_id: b.patient_id, patient_mrn: b.patient?.patient_mrn || '', first_name: b.patient?.first_name || 'Patient', last_name: b.patient?.last_name || '', full_phone: b.patient?.full_phone || '', city: b.patient?.city || '', area: b.patient?.area || '', doctor_name: b.doctor_name || '' })).sort((a, b) => b.booking_date.localeCompare(a.booking_date));
   },
 
+  // --- COUNSELING MODULE ---
+
+  async getActiveProcedures() {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('procedures')
+        .select('*')
+        .is('deleted_at', null)
+        .eq('is_active', true)
+        .order('category')
+        .order('sort_order');
+      if (!error && data) return data;
+    }
+    // Local fallback: minimal built-in list
+    return [
+      { id: 'proc-1', name: 'Sleeve Gastrectomy (Laparoscopic)',   category: 'Bariatric Surgery',  is_active: true, sort_order: 1 },
+      { id: 'proc-2', name: 'Roux-en-Y Gastric Bypass',            category: 'Bariatric Surgery',  is_active: true, sort_order: 2 },
+      { id: 'proc-3', name: 'Mini Gastric Bypass',                 category: 'Bariatric Surgery',  is_active: true, sort_order: 3 },
+      { id: 'proc-4', name: 'Laparoscopic Cholecystectomy',        category: 'Laparoscopic Surgery', is_active: true, sort_order: 10 },
+      { id: 'proc-5', name: 'Consultation Fee',                    category: 'Consultation',       is_active: true, sort_order: 60 },
+    ];
+  },
+
+  async getAllProcedures() {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('procedures')
+        .select('*')
+        .is('deleted_at', null)
+        .order('category')
+        .order('sort_order');
+      if (!error && data) return data;
+    }
+    return this.getActiveProcedures();
+  },
+
+  async saveProcedure(procedure) {
+    const user = getSession();
+    if (!user || user.role !== 'admin') {
+      throw new Error('Unauthorized: Admin role required to manage procedures.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('save_procedure_runtime', {
+        p_admin_id: user.id,
+        p_procedure: procedure,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to save procedure.');
+      broadcastEvent('procedure_change', data.procedure);
+      return data.procedure;
+    }
+    return { id: `proc-${Date.now()}`, ...procedure };
+  },
+
+  async deleteProcedure(procedureId) {
+    const user = getSession();
+    if (!user || user.role !== 'admin') {
+      throw new Error('Unauthorized: Admin role required to delete procedures.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('delete_procedure_runtime', {
+        p_admin_id: user.id,
+        p_procedure_id: procedureId,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to delete procedure.');
+      broadcastEvent('procedure_change', { id: procedureId, deleted: true });
+      return;
+    }
+  },
+
+  async getCounselingQueue(date, doctorId = null) {
+    const user = getSession();
+    if (!user || !['admin', 'counselor'].includes(user.role)) {
+      throw new Error('Unauthorized: Only Counselor and Admin can view counseling queue.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('get_counseling_queue', {
+        p_date: date,
+        p_doctor_id: doctorId,
+      });
+      if (error) throw new Error(error.message);
+      return data || [];
+    }
+    // Local fallback: return sessions from _counselingSessions
+    return _counselingSessions
+      .map(cs => {
+        const b = _bookings.find(x => x.id === cs.booking_id);
+        if (!b || b.booking_date !== date || b.deleted_at) return null;
+        if (doctorId && b.doctor_id !== doctorId) return null;
+        return {
+          session_id: cs.id,
+          booking_id: b.id,
+          counseling_status: cs.status,
+          token_number: b.token_number,
+          purpose: b.purpose,
+          source: b.source,
+          reservation_type: b.reservation_type,
+          called_as: b.called_as,
+          check_in_time: b.check_in_time,
+          checked_in_at: b.checked_in_at,
+          doctor_id: b.doctor_id,
+          doctor_name: b.doctor_name,
+          first_name: b.patient?.first_name,
+          last_name: b.patient?.last_name,
+          age: b.patient?.age,
+          full_phone: b.patient?.full_phone,
+          patient_mrn: b.patient?.patient_mrn,
+          patient_id: b.patient_id,
+          notes: cs.notes
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.token_number || 9999) - (b.token_number || 9999));
+  },
+
+  async getCounselingSessionDetail(sessionId) {
+    const user = getSession();
+    if (!user || !['admin', 'counselor'].includes(user.role)) {
+      throw new Error('Unauthorized: Prices are confidential to Counselor and Admin.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('get_counseling_session_detail', {
+        p_session_id: sessionId,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    // Local fallback
+    const cs = _counselingSessions.find(x => x.id === sessionId);
+    if (!cs) return { success: false, error: 'Session not found' };
+    const procs = _counselingProcedures.filter(x => x.session_id === sessionId);
+    return { success: true, session: cs, procedures: procs };
+  },
+
+  async counselingCheckin(bookingId) {
+    const user = getSession();
+    if (!user || (user.role !== 'counselor' && user.role !== 'admin')) {
+      throw new Error('Unauthorized: Only Counselor or Admin can start counseling.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('counseling_checkin', {
+        p_booking_id: bookingId,
+        p_user_id: user.id,
+      });
+      if (error) throw new Error(error.message);
+      broadcastEvent('counseling_change', { booking_id: bookingId, status: 'in_counseling' });
+      return data;
+    }
+    let cs = _counselingSessions.find(x => x.booking_id === bookingId);
+    if (!cs) {
+      cs = { id: `cs-${bookingId}`, booking_id: bookingId, status: 'in_counseling', counselor_id: user.id, started_at: new Date().toISOString() };
+      _counselingSessions.push(cs);
+    } else {
+      cs.status = 'in_counseling';
+      cs.counselor_id = user.id;
+      cs.started_at = cs.started_at || new Date().toISOString();
+    }
+    const b = _bookings.find(x => x.id === bookingId);
+    if (b) b.counseling_status = 'in_counseling';
+    broadcastEvent('counseling_change', { booking_id: bookingId, status: 'in_counseling' });
+    return { success: true, already_started: false, session: cs };
+  },
+
+  async saveCounseling(bookingId, items, notes, complete) {
+    const user = getSession();
+    if (!user || (user.role !== 'counselor' && user.role !== 'admin')) {
+      throw new Error('Unauthorized: Only Counselor or Admin can save counseling.');
+    }
+    // Validate prices
+    for (const item of items) {
+      if ((parseFloat(item.quoted_price) || 0) < 0) {
+        throw new Error('Price cannot be negative.');
+      }
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('save_counseling', {
+        p_booking_id: bookingId,
+        p_user_id: user.id,
+        p_items: items,
+        p_notes: notes || null,
+        p_complete: complete,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to save counseling.');
+      broadcastEvent('counseling_change', { booking_id: bookingId, status: complete ? 'done' : 'in_counseling' });
+      return data;
+    }
+    let cs = _counselingSessions.find(x => x.booking_id === bookingId);
+    if (!cs) throw new Error('No counseling session found.');
+    // Atomically replace procedure list
+    _counselingProcedures = _counselingProcedures.filter(x => x.session_id !== cs.id);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      _counselingProcedures.push({
+        id: `cp-${Date.now()}-${i}`,
+        session_id: cs.id,
+        procedure_id: it.procedure_id,
+        procedure_name_snapshot: it.procedure_name_snapshot,
+        quoted_price: parseFloat(it.quoted_price) || 0,
+        sort_order: i
+      });
+    }
+    cs.notes = notes || cs.notes;
+    if (complete) {
+      cs.status = 'done';
+      cs.completed_at = new Date().toISOString();
+    }
+    const b = _bookings.find(x => x.id === bookingId);
+    if (b && complete) b.counseling_status = 'done';
+    const total = items.reduce((s, it) => s + (parseFloat(it.quoted_price) || 0), 0);
+    broadcastEvent('counseling_change', { booking_id: bookingId, status: cs.status });
+    return { success: true, session: cs, total };
+  },
+
+  async undoCounselingCheckin(bookingId) {
+    const user = getSession();
+    if (!user || (user.role !== 'counselor' && user.role !== 'admin')) {
+      throw new Error('Unauthorized: Only Counselor or Admin can undo counseling check-in.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('undo_counseling_checkin', {
+        p_booking_id: bookingId,
+        p_user_id: user.id,
+      });
+      if (error) throw new Error(error.message);
+      broadcastEvent('counseling_change', { booking_id: bookingId, status: 'waiting' });
+      return data;
+    }
+    return { success: true };
+  },
+
+  async reprintCounselingSlip(sessionId) {
+    const user = getSession();
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('audit_logs').insert([{
+        user_id: user?.id,
+        username: user?.username || 'unknown',
+        user_role: user?.role || 'unknown',
+        action_type: 'reprint_counseling_slip',
+        entity_type: 'counseling_session',
+        entity_id: sessionId,
+        details_json: { reprinted_at: new Date().toISOString() },
+      }]);
+    }
+    return { success: true };
+  },
+
+  async getBookingWithPatient(bookingId) {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, patient:patients(*), doctor:doctors(name)')
+        .eq('id', bookingId)
+        .single();
+      if (!error && data) {
+        return { ...data, doctor_name: data.doctor?.name };
+      }
+    }
+    const b = _bookings.find(x => x.id === bookingId);
+    return b || null;
+  },
+
   // --- REALTIME ---
   subscribeToRealtime(onBookingChange, onStatusChange) {
     let unsub = () => {};
@@ -960,6 +1250,8 @@ export const api = {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'doctors' }, p => onBookingChange({ event: 'doctor_change', record: p.new || p.old }))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, p => onBookingChange({ event: 'shift_change', record: p.new || p.old }))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_token_counters' }, p => onBookingChange({ event: 'token_counter_change', record: p.new || p.old }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'counseling_sessions' }, p => onBookingChange({ event: p.eventType, table: 'counseling_sessions', record: p.new || p.old }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'procedures' }, p => onBookingChange({ event: 'procedure_change', record: p.new || p.old }))
         .subscribe(status => {
           if (status === 'SUBSCRIBED') onStatusChange?.('connected');
           else if (status === 'CLOSED') onStatusChange?.('disconnected');

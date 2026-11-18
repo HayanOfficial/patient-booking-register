@@ -30,13 +30,27 @@ export function formatDateDisplay(dateStr) {
   }).replace(/ /g, '-');
 }
 
-/** Format datetime string to time only e.g. "8:28 a.m." */
-export function formatTimestamp(ts) {
+/** Format datetime string to time only e.g. "8:28 a.m.", or full date+time */
+export function formatTimestamp(ts, mode = 'time') {
   if (!ts) return '';
   const d = new Date(ts);
-  return d.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Karachi',
-  }).toLowerCase().replace('am', 'a.m.').replace('pm', 'p.m.');
+  if (mode === 'time') {
+    return d.toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Karachi',
+    }).toLowerCase().replace('am', 'a.m.').replace('pm', 'p.m.');
+  }
+  return d.toLocaleString('en-PK', { timeZone: 'Asia/Karachi', hour12: true });
+}
+
+/** Format wait time from ISO timestamp to human "2h 15m" */
+export function formatWaitTime(isoTimestamp) {
+  if (!isoTimestamp) return '—';
+  const diff = Math.max(0, Date.now() - new Date(isoTimestamp).getTime());
+  const totalMins = Math.floor(diff / 60000);
+  if (totalMins < 1) return '<1m';
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 /** Short date "29 Sep" */

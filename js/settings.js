@@ -13,6 +13,7 @@ const $ = id => document.getElementById(id);
 
 let allDoctors = [];
 let allShifts = [];
+let allProcedures = [];
 let allLookups = [];
 
 async function init() {
@@ -30,6 +31,7 @@ async function init() {
       document.querySelectorAll('.settings-nav-btn').forEach(b => b.classList.toggle('active', b === btn));
       document.querySelectorAll('.settings-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${btn.dataset.tab}`));
       if (btn.dataset.tab === 'audit') loadAuditLogs();
+      if (btn.dataset.tab === 'procedures') loadProceduresTable();
     });
   });
 
@@ -44,6 +46,10 @@ async function init() {
   $('add-shift-btn').addEventListener('click', () => openShiftModal());
   $('save-shift-btn').addEventListener('click', saveShift);
 
+  // Procedures
+  $('add-proc-btn').addEventListener('click', () => openProcedureModal());
+  $('save-proc-btn').addEventListener('click', saveProcedure);
+
   // Lookups
   $('lookup-cat-select').addEventListener('change', () => loadLookupsTable());
   $('add-lookup-btn').addEventListener('click', () => openLookupModal());
@@ -52,12 +58,14 @@ async function init() {
   // Audit
   $('refresh-audit-btn').addEventListener('click', () => loadAuditLogs());
 
-  // Realtime updates for doctors & shifts
+  // Realtime updates for doctors & shifts & procedures
   api.subscribeToRealtime(e => {
     if (e.event === 'doctor_change') {
       loadDoctorsTable();
     } else if (e.event === 'shift_change') {
       loadShiftsTable();
+    } else if (e.event === 'procedure_change') {
+      loadProceduresTable();
     }
   });
 
@@ -65,6 +73,7 @@ async function init() {
   await loadClinicProfile();
   await loadDoctorsTable();
   await loadShiftsTable();
+  await loadProceduresTable();
   await loadLookupsTable();
 }
 
@@ -278,22 +287,107 @@ async function saveShift() {
   }
 }
 
-// 4. Lookups Table
+// 4. Procedures Table (Runtime CRUD)
+async function loadProceduresTable() {
+  allProcedures = await api.getAllProcedures();
+  const tbody = $('procedures-table')?.querySelector('tbody');
+  if (!tbody) return;
+  if (!allProcedures || allProcedures.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:16px;">No procedures configured.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allProcedures.map(p => `
+    <tr>
+      <td><strong>${p.name}</strong></td>
+      <td><span class="badge badge--gray">${p.category || 'General'}</span></td>
+      <td>${p.sort_order ?? 0}</td>
+      <td><span class="badge ${p.is_active ? 'badge--green' : 'badge--gray'}">${p.is_active ? 'Active' : 'Disabled'}</span></td>
+      <td>
+        <button class="action-btn" title="Edit" data-proc-edit="${p.id}">✏️</button>
+        <button class="action-btn action-btn--danger" title="Delete" data-proc-del="${p.id}">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('[data-proc-edit]').forEach(b => {
+    b.addEventListener('click', () => {
+      const proc = allProcedures.find(x => x.id === b.dataset.procEdit);
+      if (proc) openProcedureModal(proc);
+    });
+  });
+
+  tbody.querySelectorAll('[data-proc-del]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const proc = allProcedures.find(x => x.id === b.dataset.procDel);
+      if (confirmDialog(`Are you sure you want to delete procedure "${proc?.name || 'Item'}"?`)) {
+        try {
+          await api.deleteProcedure(b.dataset.procDel);
+          showToast('Procedure deleted.', 'success');
+          await loadProceduresTable();
+        } catch (e) {
+          showToast('Failed to delete: ' + e.message, 'error');
+        }
+      }
+    });
+  });
+}
+
+function openProcedureModal(proc = null) {
+  $('proc-edit-id').value = proc?.id || '';
+  $('proc-edit-name').value = proc?.name || '';
+  $('proc-edit-category').value = proc?.category || '';
+  $('proc-edit-order').value = proc?.sort_order ?? (allProcedures.length + 1);
+  $('proc-edit-active').value = proc?.is_active === false ? 'false' : 'true';
+  $('procedure-modal').classList.add('open');
+}
+
+async function saveProcedure() {
+  const name = $('proc-edit-name').value.trim();
+  if (!name) { showToast('Procedure name is required.', 'error'); return; }
+  const payload = {
+    id: $('proc-edit-id').value || undefined,
+    name,
+    category: $('proc-edit-category').value.trim() || null,
+    sort_order: parseInt($('proc-edit-order').value, 10) || 0,
+    is_active: $('proc-edit-active').value === 'true',
+  };
+  try {
+    await api.saveProcedure(payload);
+    $('procedure-modal').classList.remove('open');
+    showToast('Procedure saved successfully.', 'success');
+    await loadProceduresTable();
+  } catch (e) {
+    showToast('Failed to save procedure: ' + e.message, 'error');
+  }
+}
+
+// 5. Lookups Table
 async function loadLookupsTable() {
   const cat = $('lookup-cat-select').value;
   allLookups = await api.getLookupsByCategory(cat);
   const tbody = $('lookups-table').querySelector('tbody');
   tbody.innerHTML = allLookups.map(l => `
     <tr>
-      <td><strong>${l.name}</strong></td>
+      <td>
+        <strong>${l.name}</strong>
+        ${l.requires_counseling ? '<span class="badge badge--blue" style="margin-left:6px;font-size:.7rem;">Counseling Required</span>' : ''}
+      </td>
       <td><span class="badge badge--gray">${l.category}</span></td>
       <td>${l.sort_order || 1}</td>
       <td><span class="badge ${l.is_active ? 'badge--green' : 'badge--gray'}">${l.is_active ? 'Active' : 'Disabled'}</span></td>
       <td>
+        <button class="action-btn" title="Edit" data-lkp-edit="${l.id}">✏️</button>
         <button class="action-btn action-btn--danger" title="Delete" data-lkp-del="${l.id}">🗑</button>
       </td>
     </tr>
   `).join('');
+
+  tbody.querySelectorAll('[data-lkp-edit]').forEach(b => {
+    b.addEventListener('click', () => {
+      const item = allLookups.find(x => x.id === b.dataset.lkpEdit);
+      if (item) openLookupModal(item);
+    });
+  });
 
   tbody.querySelectorAll('[data-lkp-del]').forEach(b => {
     b.addEventListener('click', async () => {
@@ -306,32 +400,42 @@ async function loadLookupsTable() {
   });
 }
 
-function openLookupModal() {
-  $('lkp-id').value = '';
-  $('lkp-name').value = '';
+function openLookupModal(item = null) {
+  $('lkp-id').value = item?.id || '';
+  $('lkp-name').value = item?.name || '';
+  $('lkp-color').value = item?.color || '#3B82F6';
+  const isPurpose = $('lookup-cat-select').value === 'purpose';
+  const wrap = $('lkp-counseling-wrap');
+  if (wrap) {
+    wrap.style.display = isPurpose ? 'block' : 'none';
+    $('lkp-requires-counseling').checked = item ? !!item.requires_counseling : (item?.name?.toLowerCase() === 'consultation');
+  }
   $('lookup-modal').classList.add('open');
 }
 
 async function saveLookupItem() {
   const name = $('lkp-name').value.trim();
   if (!name) { showToast('Name required', 'error'); return; }
+  const cat = $('lookup-cat-select').value;
   const payload = {
-    category: $('lookup-cat-select').value,
+    id: $('lkp-id').value || undefined,
+    category: cat,
     name,
     color: $('lkp-color').value,
+    requires_counseling: cat === 'purpose' ? $('lkp-requires-counseling').checked : false,
     is_active: true,
   };
   try {
     await api.saveLookupItem(payload);
     $('lookup-modal').classList.remove('open');
-    showToast('Lookup item added.', 'success');
+    showToast('Lookup item saved.', 'success');
     await loadLookupsTable();
   } catch (e) {
     showToast('Failed to save item: ' + e.message, 'error');
   }
 }
 
-// 5. Audit Log Table
+// 6. Audit Log Table
 async function loadAuditLogs() {
   const logs = await api.getAuditLogs(100);
   const tbody = $('audit-table').querySelector('tbody');

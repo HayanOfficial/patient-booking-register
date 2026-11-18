@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Procedure Slip</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="./css/print.css" media="print" />
+  <style>
+    /* ---- On-screen preview styles ---- */
+    body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; padding: 24px; }
+    .slip-preview { background: #fff; width: 80mm; min-height: 160mm; padding: 8mm; box-shadow: 0 4px 24px rgba(0,0,0,.18); border-radius: 4px; margin-bottom: 16px; font-family: 'Courier New', Courier, monospace; }
+    .slip-preview.a5 { width: 148mm; }
+
+    /* Controls */
+    .print-controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; justify-content: center; }
+
+    /* Slip content */
+    .slip-clinic-name { font-size: 1rem; font-weight: 700; text-align: center; border-bottom: 1px dashed #333; padding-bottom: 4px; margin-bottom: 6px; }
+    .slip-token-block { text-align: center; margin: 8px 0; }
+    .slip-token-number { font-size: 3.5rem; font-weight: 900; line-height: 1; color: #059669; }
+    .slip-token-label  { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: #555; }
+    .slip-divider { border: none; border-top: 1px dashed #bbb; margin: 6px 0; }
+    .slip-row { display: flex; justify-content: space-between; font-size: .68rem; margin: 2px 0; }
+    .slip-row-label { color: #555; }
+    .slip-proc-header { font-size: .68rem; font-weight: 700; border-bottom: 1px solid #333; margin: 6px 0 4px; display: flex; justify-content: space-between; }
+    .slip-proc-row { font-size: .65rem; display: flex; justify-content: space-between; padding: 1px 0; border-bottom: 1px dotted #ddd; }
+    .slip-total-row { font-size: .72rem; font-weight: 700; display: flex; justify-content: space-between; border-top: 1px solid #333; margin-top: 4px; padding-top: 2px; }
+    .slip-qr { text-align: center; margin-top: 6px; }
+    .slip-footer { text-align: center; font-size: .6rem; color: #777; margin-top: 6px; border-top: 1px dashed #bbb; padding-top: 4px; }
+
+    /* Print */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .print-controls { display: none; }
+      .slip-preview { box-shadow: none; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Controls -->
+  <div class="print-controls" id="print-controls">
+    <button class="btn btn--secondary btn--sm" id="btn-80mm">📄 80mm</button>
+    <button class="btn btn--secondary btn--sm" id="btn-a5">📃 A5</button>
+    <button class="btn btn--primary btn--sm" id="btn-print">🖨️ Print</button>
+    <button class="btn btn--outline btn--sm" id="btn-reprint">↩ Reprint</button>
+    <button class="btn btn--ghost btn--sm" id="btn-close">✕ Close</button>
+  </div>
+
+  <!-- Slip Preview -->
+  <div class="slip-preview" id="slip-preview">
+    <div class="slip-clinic-name" id="slip-clinic-name">Bariatric Surgery Clinic</div>
+
+    <!-- Token -->
+    <div class="slip-token-block">
+      <div class="slip-token-label">Procedure Slip — Token No.</div>
+      <div class="slip-token-number" id="slip-token">—</div>
+      <div class="slip-token-label" id="slip-doctor-name">—</div>
+    </div>
+
+    <hr class="slip-divider" />
+
+    <!-- Patient Info -->
+    <div class="slip-row"><span class="slip-row-label">Patient</span><span id="slip-patient-name">—</span></div>
+    <div class="slip-row"><span class="slip-row-label">MR No.</span><span id="slip-mrn">—</span></div>
+    <div class="slip-row"><span class="slip-row-label">Age / Phone</span><span id="slip-age-phone">—</span></div>
+    <div class="slip-row"><span class="slip-row-label">Date</span><span id="slip-date">—</span></div>
+    <div class="slip-row"><span class="slip-row-label">Counseled at</span><span id="slip-counsel-time">—</span></div>
+    <div class="slip-row"><span class="slip-row-label">Counselor</span><span id="slip-counselor">—</span></div>
+
+    <hr class="slip-divider" />
+
+    <!-- Procedures -->
+    <div id="slip-procs-section">
+      <div class="slip-proc-header">
+        <span>Procedure</span>
+        <span id="slip-price-col-header">Quoted Price</span>
+      </div>
+      <div id="slip-proc-rows">
+        <!-- rows inserted by JS -->
+      </div>
+      <div class="slip-total-row" id="slip-total-row" style="display:none;">
+        <span>Total</span>
+        <span id="slip-total">Rs 0</span>
+      </div>
+    </div>
+
+    <hr class="slip-divider" />
+
+    <!-- QR -->
+    <div class="slip-qr" id="slip-qr"></div>
+
+    <div class="slip-footer" id="slip-footer">Thank you for visiting Bariatric Surgery Clinic</div>
+  </div>
+
+  <script type="module" src="./js/print-slip.js"></script>
+</body>
+</html>

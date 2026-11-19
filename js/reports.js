@@ -7,7 +7,7 @@ import { todayDateString, offsetDate, getStatusLabel, getStatusClass } from './u
 import Chart from 'chart.js/auto';
 import * as XLSX from 'xlsx';
 
-const user = requireAuth();
+const user = requireAuth(['admin']);
 if (!user) throw new Error('Not authenticated');
 
 const $ = id => document.getElementById(id);

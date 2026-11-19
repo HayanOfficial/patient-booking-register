@@ -582,25 +582,6 @@ export const api = {
     b.checked_in_at = b.check_in_time;
     b.updated_at = b.check_in_time;
 
-    // Auto-create counseling session if purpose requires counseling
-    const purposeItem = _lookups.find(l => l.category === 'purpose' && l.name?.toLowerCase() === b.purpose?.toLowerCase());
-    const reqCounseling = purposeItem ? (purposeItem.requires_counseling !== false && (purposeItem.requires_counseling || purposeItem.name?.toLowerCase() === 'consultation')) : (b.purpose?.toLowerCase() === 'consultation');
-    if (reqCounseling) {
-      if (!_counselingSessions.find(cs => cs.booking_id === b.id)) {
-        _counselingSessions.push({
-          id: `cs-${b.id}`,
-          booking_id: b.id,
-          status: 'waiting',
-          counselor_id: null,
-          started_at: null,
-          completed_at: null,
-          notes: '',
-          created_at: new Date().toISOString()
-        });
-      }
-      b.counseling_status = 'waiting';
-    }
-
     broadcastEvent('booking_checkin', b);
     return { success: true, already_checked_in: false, token_number: nextToken, token_code: String(nextToken), checked_in_at: b.checked_in_at, booking: b };
   },
@@ -674,19 +655,18 @@ export const api = {
 
   async getReceptionBookings(doctorId, dateStr = todayDateString(), statusFilter = 'pending') {
     if (isSupabaseConfigured && supabase) {
-      // NOTE: do NOT join counseling_sessions here — it causes a schema error on some DBs
       let q = supabase.from('bookings')
         .select('*, patient:patients(*), doctor:doctors(name), shift:shifts(name)')
         .eq('booking_date', dateStr)
         .is('deleted_at', null);
       if (doctorId) q = q.eq('doctor_id', doctorId);
-      if (statusFilter === 'pending') {
+      if (statusFilter === 'pending' || statusFilter === 'booked') {
         q = q.eq('status', 'pending').order('slot_index');
-      } else if (statusFilter === 'checked_in') {
-        q = q.in('status', ['checked_in', 'in_process', 'completed'])
+      } else if (statusFilter === 'checked_in' || statusFilter === 'modern_list' || statusFilter === 'checked_in_active') {
+        q = q.in('status', ['checked_in', 'in_process', 'completed', 'checked_out', 'in_counseling', 'procedure_done'])
               .order('token_number', { ascending: true, nullsFirst: false });
       } else {
-        // 'all' — no status filter, fetch everything for this doctor+date
+        // 'all'
         q = q.order('slot_index');
       }
       const { data, error } = await q;
@@ -695,7 +675,7 @@ export const api = {
           ...b,
           doctor_name: b.doctor?.name,
           shift_name: b.shift?.name,
-          counseling_status: null, // fetched separately if needed
+          counseling_status: null,
         }));
       }
       if (error) console.warn('getReceptionBookings Supabase error:', error.message);
@@ -703,11 +683,11 @@ export const api = {
     // Local in-memory fallback
     let all = _bookings.filter(b => b.booking_date === dateStr && !b.deleted_at && b.status !== 'cancelled');
     if (doctorId) all = all.filter(b => b.doctor_id === doctorId);
-    if (statusFilter === 'pending') {
+    if (statusFilter === 'pending' || statusFilter === 'booked') {
       return all.filter(b => b.status === 'pending').sort((a, b) => a.slot_index - b.slot_index);
-    } else if (statusFilter === 'checked_in') {
-      return all.filter(b => b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed')
-                .sort((a, b) => (a.token_number || 0) - (b.token_number || 0));
+    } else if (statusFilter === 'checked_in' || statusFilter === 'modern_list' || statusFilter === 'checked_in_active') {
+      return all.filter(b => ['checked_in', 'in_process', 'completed', 'checked_out', 'in_counseling', 'procedure_done'].includes(b.status))
+                .sort((a, b) => (a.token_number || 9999) - (b.token_number || 9999));
     }
     // 'all'
     return all.sort((a, b) => (a.slot_index || 0) - (b.slot_index || 0));
@@ -750,6 +730,52 @@ export const api = {
     });
   },
 
+  async advanceBookingStatus(bookingId, targetStatus, reason = null) {
+    const user = getSession();
+    if (!user) throw new Error('Unauthorized');
+    if (user.role === 'operator') {
+      throw new Error('Unauthorized: Operator cannot advance patient status.');
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('advance_booking_status', {
+        p_booking_id: bookingId,
+        p_user_id: user.id,
+        p_target_status: targetStatus,
+        p_reason: reason || null,
+      });
+      if (error) throw new Error(error.message);
+      if (data && !data.success) throw new Error(data.error || 'Failed to advance status.');
+      broadcastEvent('booking_updated', data.booking || { id: bookingId, status: targetStatus });
+      return data;
+    }
+    // Local fallback
+    const b = _bookings.find(x => x.id === bookingId);
+    if (!b) throw new Error('Booking not found');
+    const now = new Date().toISOString();
+    b.status = targetStatus;
+    b.updated_at = now;
+    if (targetStatus === 'in_process') {
+      b.in_process_time = b.in_process_time || now;
+    } else if (targetStatus === 'completed') {
+      b.completed_time = b.completed_time || now;
+      const cs = _counselingSessions.find(x => x.booking_id === bookingId && x.status === 'waiting');
+      if (cs) cs.status = 'voided';
+    } else if (targetStatus === 'checked_out') {
+      b.checkout_time = now;
+      let cs = _counselingSessions.find(x => x.booking_id === bookingId);
+      if (!cs) {
+        cs = { id: `cs-${bookingId}`, booking_id: bookingId, status: 'waiting', counselor_id: null, created_at: now };
+        _counselingSessions.push(cs);
+      } else if (cs.status !== 'done') {
+        cs.status = 'waiting';
+        cs.updated_at = now;
+      }
+      b.counseling_status = 'waiting';
+    }
+    broadcastEvent('booking_updated', { ...b });
+    return { success: true, booking: b };
+  },
+
   async updateBookingStatus(bookingId, status, userId, username, reason) {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.rpc('update_booking_status', { p_booking_id: bookingId, p_status: status, p_user_id: userId, p_username: username, p_reason: reason || null });
@@ -761,6 +787,17 @@ export const api = {
     if (status === 'checked_in') b.check_in_time = new Date().toISOString();
     if (status === 'in_process') b.in_process_time = new Date().toISOString();
     if (status === 'completed') b.completed_time = new Date().toISOString();
+    if (status === 'checked_out') {
+      b.checkout_time = new Date().toISOString();
+      let cs = _counselingSessions.find(x => x.booking_id === bookingId);
+      if (!cs) {
+        cs = { id: `cs-${bookingId}`, booking_id: bookingId, status: 'waiting', counselor_id: null, created_at: b.checkout_time };
+        _counselingSessions.push(cs);
+      } else if (cs.status !== 'done') {
+        cs.status = 'waiting';
+      }
+      b.counseling_status = 'waiting';
+    }
     if (status === 'absent') b.absent_time = new Date().toISOString();
     broadcastEvent('booking_updated', { ...b });
     return { ...b };
@@ -1115,12 +1152,14 @@ export const api = {
       const { data, error } = await supabase.rpc('get_counseling_queue', {
         p_date: date,
         p_doctor_id: doctorId,
+        p_user_id: user.id,
       });
       if (error) throw new Error(error.message);
       return data || [];
     }
     // Local fallback: return sessions from _counselingSessions
     return _counselingSessions
+      .filter(cs => cs.status !== 'voided' && !cs.deleted_at)
       .map(cs => {
         const b = _bookings.find(x => x.id === cs.booking_id);
         if (!b || b.booking_date !== date || b.deleted_at) return null;
@@ -1136,6 +1175,7 @@ export const api = {
           called_as: b.called_as,
           check_in_time: b.check_in_time,
           checked_in_at: b.checked_in_at,
+          checkout_time: b.checkout_time,
           doctor_id: b.doctor_id,
           doctor_name: b.doctor_name,
           first_name: b.patient?.first_name,
@@ -1176,7 +1216,7 @@ export const api = {
       throw new Error('Unauthorized: Only Counselor or Admin can start counseling.');
     }
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.rpc('counseling_checkin', {
+      const { data, error } = await supabase.rpc('start_counseling', {
         p_booking_id: bookingId,
         p_user_id: user.id,
       });
@@ -1194,7 +1234,10 @@ export const api = {
       cs.started_at = cs.started_at || new Date().toISOString();
     }
     const b = _bookings.find(x => x.id === bookingId);
-    if (b) b.counseling_status = 'in_counseling';
+    if (b) {
+      b.counseling_status = 'in_counseling';
+      b.status = 'in_counseling';
+    }
     broadcastEvent('counseling_change', { booking_id: bookingId, status: 'in_counseling' });
     return { success: true, already_started: false, session: cs };
   },
@@ -1244,7 +1287,10 @@ export const api = {
       cs.completed_at = new Date().toISOString();
     }
     const b = _bookings.find(x => x.id === bookingId);
-    if (b && complete) b.counseling_status = 'done';
+    if (b && complete) {
+      b.counseling_status = 'done';
+      b.status = 'procedure_done';
+    }
     const total = items.reduce((s, it) => s + (parseFloat(it.quoted_price) || 0), 0);
     broadcastEvent('counseling_change', { booking_id: bookingId, status: cs.status });
     return { success: true, session: cs, total };
@@ -1264,6 +1310,18 @@ export const api = {
       broadcastEvent('counseling_change', { booking_id: bookingId, status: 'waiting' });
       return data;
     }
+    const cs = _counselingSessions.find(x => x.booking_id === bookingId);
+    if (cs) {
+      cs.status = 'waiting';
+      cs.counselor_id = null;
+      cs.started_at = null;
+    }
+    const b = _bookings.find(x => x.id === bookingId);
+    if (b) {
+      b.counseling_status = 'waiting';
+      b.status = 'checked_out';
+    }
+    broadcastEvent('counseling_change', { booking_id: bookingId, status: 'waiting' });
     return { success: true };
   },
 

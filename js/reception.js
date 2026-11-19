@@ -1,6 +1,7 @@
 // ==============================================================================
-// Reception Appointment Dashboard Controller
-// Replicates /reference/dashbord 1.png, booking.png, booking checkin.png
+// js/reception.js — Reception Appointment Dashboard Controller
+// Role: Receptionist or Admin only
+// Matches /reference/dashbord 1.png, booking.png, booking checkin.png
 // ==============================================================================
 import { requireAuth, logout } from './auth.js';
 import { api } from './api.js';
@@ -19,12 +20,13 @@ let activeDoctors = [];
 let allShifts = [];
 let lookups = { source: [], purpose: [] };
 let selectedDoctorId = null;
-let currentSubTab = 'pending'; // 'pending' or 'checked_in'
 let cachedWorkload = [];
-let activeBookings = [];
+let bookedPatients = [];
+let checkedInPatients = [];
+let waitingListItems = [];
 
 async function init() {
-  // Setup user menu
+  // User Header & Menu
   $('hdr-username').textContent = user.full_name || user.username;
   $('logout-btn').addEventListener('click', () => logout());
   $('user-menu-btn').addEventListener('click', e => {
@@ -39,6 +41,8 @@ async function init() {
   if (user.role !== 'admin') {
     $('nav-settings-link')?.remove();
     $('nav-users-link')?.remove();
+    $('nav-reports-link')?.remove();
+    $('nav-counseling-link')?.remove();
   }
 
   // Set today's date display
@@ -69,8 +73,9 @@ async function init() {
 
   // Header Navigation buttons
   $('btn-from-booking').addEventListener('click', () => openSelectDoctorModal());
-  $('btn-from-waiting').addEventListener('click', () => { window.location.href = './booking.html#waiting-list'; });
-  $('btn-add-waiting').addEventListener('click', () => openQuickBookModal('Walk-in'));
+  $('btn-from-waiting').addEventListener('click', () => openWaitingListModal());
+  $('btn-add-waiting').addEventListener('click', () => openQuickBookModal('Waiting'));
+  $('btn-modern-list').addEventListener('click', () => openModernListModal());
 
   // Appointment Type cards (Click & Shortcuts)
   $('btn-add-appointment').addEventListener('click', () => openQuickBookModal('Appointment'));
@@ -89,19 +94,14 @@ async function init() {
   });
 
   // =========================================================
-  // SELECT DOCTOR MODAL — matching /reference/booking.png
+  // 1. SELECT DOCTOR MODAL (Matching reference/booking.png)
   // =========================================================
   $('select-doctor-close').addEventListener('click', () => closeModal('select-doctor-modal'));
   $('select-doctor-close-btn').addEventListener('click', () => closeModal('select-doctor-modal'));
 
-  // "View Today's Booking" button — goes straight to first doctor's check-in
   $('btn-view-today-modal').addEventListener('click', () => {
     closeModal('select-doctor-modal');
-    if (activeDoctors.length > 0) {
-      openDoctorCheckin(activeDoctors[0].id);
-    } else {
-      showToast('No active doctors found.', 'info');
-    }
+    openDoctorCheckin(null); // All doctors
   });
 
   $('modal-quick-doctor-search').addEventListener('input', e => filterDoctorCards(e.target.value));
@@ -118,7 +118,7 @@ async function init() {
   });
 
   // =========================================================
-  // DOCTOR CHECK-IN MODAL — matching /reference/booking checkin.png
+  // 2. FROM BOOKING: CHECK-IN DESK MODAL (reference/booking checkin.png)
   // =========================================================
   $('doctor-checkin-close').addEventListener('click', () => closeModal('doctor-checkin-modal'));
   $('doctor-checkin-close-btn').addEventListener('click', () => closeModal('doctor-checkin-modal'));
@@ -126,12 +126,32 @@ async function init() {
     closeModal('doctor-checkin-modal');
     openSelectDoctorModal();
   });
-
-  $('tab-checkin-pending').addEventListener('click', () => switchCheckinSubTab('pending'));
-  $('tab-checkin-checked').addEventListener('click', () => switchCheckinSubTab('checked_in'));
   $('checkin-patient-search').addEventListener('input', e => filterCheckinTable(e.target.value));
 
-  // Quick Book modal handlers
+  // =========================================================
+  // 3. MODERN LIST VIEW MODAL
+  // =========================================================
+  $('modern-list-close').addEventListener('click', () => closeModal('modern-list-modal'));
+  $('modern-list-close-btn').addEventListener('click', () => closeModal('modern-list-modal'));
+  $('mlv-search-input').addEventListener('input', e => filterModernListTable(e.target.value));
+  $('mlv-doctor-filter').addEventListener('change', () => loadModernListData());
+
+  // Event delegation for Modern List View workflow buttons
+  $('mlv-table').querySelector('tbody').addEventListener('click', handleModernListAction);
+
+  // =========================================================
+  // 4. WAITING LIST MODAL
+  // =========================================================
+  $('waiting-list-close').addEventListener('click', () => closeModal('waiting-list-modal'));
+  $('waiting-list-close-btn').addEventListener('click', () => closeModal('waiting-list-modal'));
+  $('wl-add-new-btn').addEventListener('click', () => {
+    closeModal('waiting-list-modal');
+    openQuickBookModal('Waiting');
+  });
+
+  // =========================================================
+  // 5. QUICK BOOK MODAL
+  // =========================================================
   $('qb-close').addEventListener('click', () => closeModal('quick-book-modal'));
   $('qb-cancel').addEventListener('click', () => closeModal('quick-book-modal'));
   $('qb-form').addEventListener('submit', handleQuickBookSubmit);
@@ -141,7 +161,7 @@ async function init() {
   await loadLookupsAndDoctors();
   await loadWorkloadData();
 
-  // Start Realtime (no manual refresh button!)
+  // Start Realtime (no manual refresh button needed)
   startRealtime(onRealtimeEvent, '#realtime-indicator');
   setUpdatedTimestamp();
 }
@@ -151,6 +171,7 @@ function updateDateDisplay() {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Karachi' };
   $('hdr-date-text').textContent = now.toLocaleDateString('en-US', options);
   $('checkin-date').textContent = currentDate;
+  $('mlv-date').textContent = currentDate;
 }
 
 function setUpdatedTimestamp() {
@@ -169,6 +190,9 @@ async function loadLookupsAndDoctors() {
   // Filter dropdowns
   const docSelect = $('flt-doctor');
   docSelect.innerHTML = '<option value="">All Doctors</option>' + activeDoctors.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+
+  const mlvDocFilter = $('mlv-doctor-filter');
+  mlvDocFilter.innerHTML = '<option value="">All Doctors</option>' + activeDoctors.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
 
   const srcSelect = $('flt-source');
   srcSelect.innerHTML = '<option value="">All Sources</option>' + lookups.source.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
@@ -198,7 +222,7 @@ function renderWorkloadGrid(workloads) {
     return;
   }
   grid.innerHTML = workloads.map(w => `
-    <div class="workload-card" data-doctor-id="${w.id}" style="cursor:pointer;" title="Click to open check-in desk">
+    <div class="workload-card" data-doctor-id="${w.id}" style="cursor:pointer;" title="Click to open From Booking check-in desk">
       <div class="workload-top">
         <span class="workload-doctor-name">${w.name}</span>
         <span class="workload-badge-total">${w.total_bookings}</span>
@@ -221,7 +245,7 @@ function renderWorkloadGrid(workloads) {
 }
 
 // =========================================================
-// SELECT DOCTOR MODAL — doctor cards (reference/booking.png)
+// 1. SELECT DOCTOR MODAL (Matching reference/booking.png)
 // =========================================================
 function renderSelectDoctorCards(workloads) {
   const container = $('modal-doctor-cards');
@@ -242,7 +266,7 @@ function renderSelectDoctorCards(workloads) {
         <span class="doctor-select-badge">${w.total_bookings}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.8rem;">
-        <span style="color:#475569;">📅 ${w.total_bookings} bookings today &nbsp;·&nbsp; ⏳ ${w.pending_count} pending</span>
+        <span style="color:#475569;">📅 ${w.total_bookings} bookings today &nbsp;·&nbsp; ⏳ ${w.pending_count} booked</span>
         <span style="color:#2563eb;background:#eff6ff;padding:2px 10px;border-radius:9999px;font-weight:700;font-size:.75rem;">🟢 Active Now</span>
       </div>
     </div>
@@ -264,15 +288,12 @@ function filterDoctorCards(query) {
   });
 }
 
-// --- Select Doctor & Check-in Desk Modals ---
 async function openSelectDoctorModal() {
-  // Show modal immediately with current cached data, then refresh
   $('select-doctor-modal').classList.add('open');
   $('modal-quick-doctor-search').value = '';
   $('modal-find-patient-input').value = '';
   filterDoctorCards('');
 
-  // Refresh doctor workload counts in background
   try {
     await loadWorkloadData();
   } catch (err) {
@@ -281,83 +302,48 @@ async function openSelectDoctorModal() {
 }
 
 // =========================================================
-// DOCTOR CHECK-IN MODAL — (reference/booking checkin.png)
+// 2. FROM BOOKING: CHECK-IN DESK MODAL (reference/booking checkin.png)
+// Shows today's Booked patients with one Check-in button per row.
 // =========================================================
-async function openDoctorCheckin(doctorId) {
+async function openDoctorCheckin(doctorId = null) {
   selectedDoctorId = doctorId;
   const doc = activeDoctors.find(d => d.id === doctorId);
-  currentSubTab = 'pending'; // always start on Pending tab
-
-  // Update modal header
-  $('checkin-doc-name').textContent = doc ? doc.name : 'Doctor';
+  $('checkin-doc-name').textContent = doc ? doc.name : 'All Doctors';
   $('checkin-date').textContent = currentDate;
   $('checkin-patient-search').value = '';
 
-  // Reset tab UI
-  $('tab-checkin-pending').classList.add('active');
-  $('tab-checkin-checked').classList.remove('active');
-
   $('doctor-checkin-modal').classList.add('open');
 
-  // Show spinner while loading
   const tbody = $('checkin-bookings-table').querySelector('tbody');
-  tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="text-align:center;padding:28px;">⏳ Loading bookings...</td></tr>`;
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="text-align:center;padding:28px;">⏳ Loading booked patients...</td></tr>`;
 
   await loadDoctorCheckinData();
 }
 
 async function loadDoctorCheckinData() {
-  if (!selectedDoctorId) return;
-
   try {
-    // Load all bookings for this doctor today (for tab badge counts)
-    const allForDoc = await api.getReceptionBookings(selectedDoctorId, currentDate, 'all');
-    const pendingBookings = allForDoc.filter(b => b.status === 'pending');
-    const checkedInBookings = allForDoc.filter(b =>
-      b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed'
-    );
-
-    $('badge-pending-count').textContent = pendingBookings.length;
-    $('badge-checked-count').textContent = checkedInBookings.length;
-
-    // Show the right set
-    if (currentSubTab === 'pending') {
-      activeBookings = pendingBookings.sort((a, b) => (a.slot_index || 0) - (b.slot_index || 0));
-    } else {
-      activeBookings = checkedInBookings.sort((a, b) => (a.token_number || 9999) - (b.token_number || 9999));
-    }
-
-    renderCheckinTable(activeBookings);
+    // Only fetch booked / pending patients for today
+    bookedPatients = await api.getReceptionBookings(selectedDoctorId, currentDate, 'pending');
+    $('badge-pending-count').textContent = bookedPatients.length;
+    renderCheckinTable(bookedPatients);
   } catch (err) {
     console.error('loadDoctorCheckinData error:', err);
     const tbody = $('checkin-bookings-table').querySelector('tbody');
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="color:#ef4444;">Failed to load: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="color:#ef4444;">Failed to load bookings: ${err.message}</td></tr>`;
   }
 }
 
-function switchCheckinSubTab(tab) {
-  currentSubTab = tab;
-  $('tab-checkin-pending').classList.toggle('active', tab === 'pending');
-  $('tab-checkin-checked').classList.toggle('active', tab === 'checked_in');
-  $('checkin-patient-search').value = '';
-  loadDoctorCheckinData();
-}
-
-// =========================================================
-// TABLE RENDER — matching /reference/booking checkin.png
-// =========================================================
 function renderCheckinTable(bookings) {
   const tbody = $('checkin-bookings-table').querySelector('tbody');
 
   if (!bookings || bookings.length === 0) {
-    const emptyMsg = currentSubTab === 'pending'
-      ? 'No pending appointments for today.'
-      : 'No checked-in patients yet.';
     tbody.innerHTML = `
       <tr class="empty-row">
-        <td colspan="7" style="text-align:center;padding:32px;">
-          <div style="color:#64748b;font-size:.9rem;margin-bottom:12px;">${emptyMsg}</div>
-          ${currentSubTab === 'pending' ? `<button class="btn btn--primary btn--sm" onclick="document.getElementById('btn-add-walkin').click();document.getElementById('doctor-checkin-modal').classList.remove('open');">➕ Add Walk-in Patient</button>` : ''}
+        <td colspan="7" style="text-align:center;padding:36px;">
+          <div style="color:#64748b;font-size:.95rem;margin-bottom:12px;">No pending bookings waiting for check-in today.</div>
+          <button class="btn btn--primary btn--sm" onclick="document.getElementById('doctor-checkin-modal').classList.remove('open');document.getElementById('btn-add-walkin').click();">
+            ➕ Add Walk-in Patient
+          </button>
         </td>
       </tr>`;
     return;
@@ -368,43 +354,10 @@ function renderCheckinTable(bookings) {
     const patientName = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Patient';
     const timeFormatted = b.slot_time_formatted || b.slot_time || '—';
 
-    let actionCell = '';
-
-    if (currentSubTab === 'pending') {
-      // Blue "➜ Check-in" button — token is assigned on click
-      actionCell = `
-        <button class="btn-checkin-blue" data-checkin-id="${b.id}">
-          ➜ Check-in
-        </button>`;
-    } else {
-      // Already checked-in: show token badge + undo
-      const tokenDisplay = b.token_number && b.token_number > 0
-        ? `Token #${b.token_number}`
-        : (b.token_code && b.token_code !== 'Pending' ? b.token_code : '—');
-
-      const counselBadge = b.counseling_status === 'waiting'
-        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--waiting">⏳ Counseling</span></div>'
-        : b.counseling_status === 'in_counseling'
-        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--in_counseling">💬 In Session</span></div>'
-        : b.counseling_status === 'done'
-        ? '<div style="margin-top:4px;"><span class="counsel-badge counsel-badge--done">✅ Done</span></div>'
-        : '';
-
-      actionCell = `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-          <div style="display:flex;align-items:center;gap:5px;">
-            <span style="font-weight:800;color:#1e3a8a;background:#dbeafe;padding:2px 10px;border-radius:4px;font-size:.85rem;">${tokenDisplay}</span>
-            <button class="btn btn--secondary btn--sm" data-undo-id="${b.id}" title="Undo check-in">↩</button>
-          </div>
-          <div style="font-size:.7rem;color:#059669;">In: ${formatTimestamp(b.checked_in_at || b.check_in_time)}</div>
-          ${counselBadge}
-        </div>`;
-    }
-
-    // Source badge styling
+    // Colored source tag
     const src = b.source || 'Direct';
     const srcColors = {
-      'Self': '#4f46e5', 'Tiktok': '#000', 'Facebook': '#1877f2',
+      'Self': '#4f46e5', 'Tiktok': '#000000', 'Facebook': '#1877f2',
       'Google': '#ea4335', 'WhatsApp': '#25d366', 'Direct': '#64748b'
     };
     const srcColor = srcColors[src] || '#475569';
@@ -433,51 +386,40 @@ function renderCheckinTable(bookings) {
         <td>
           <span class="badge badge--gray">${b.purpose || 'Consultation'}</span>
         </td>
-        <td style="text-align:center;">${actionCell}</td>
+        <td style="text-align:center;">
+          <button class="btn-checkin-blue" data-checkin-id="${b.id}">
+            ➜ Check-in
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
 
-  // ---- Check-in button handlers ----
+  // Check-in button: Single token sequence generated in check-in order
   tbody.querySelectorAll('[data-checkin-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const bId = btn.dataset.checkinId;
       btn.disabled = true;
       btn.textContent = 'Checking in...';
       btn.style.opacity = '0.7';
+
       try {
         const res = await api.checkinBooking(bId);
         const tokenNum = res.token_number;
-        showToast(`✅ Checked In! Token #${tokenNum} assigned.`, 'success');
+        showToast(`✅ Patient Checked In! Token #${tokenNum} assigned.`, 'success');
 
-        // Refresh table & workload
+        // Refresh From Booking list (moves patient out of this list)
         await loadDoctorCheckinData();
         await loadWorkloadData();
 
         // Auto-print token slip
-        const booking = activeBookings.find(x => x.id === bId) || res.booking || {};
+        const booking = bookedPatients.find(x => x.id === bId) || res.booking || {};
         printTokenSlip({ ...booking, token_number: tokenNum }, tokenNum);
       } catch (err) {
         showToast('Check-in failed: ' + err.message, 'error');
         btn.disabled = false;
         btn.textContent = '➜ Check-in';
         btn.style.opacity = '';
-      }
-    });
-  });
-
-  // ---- Undo button handlers ----
-  tbody.querySelectorAll('[data-undo-id]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const bId = btn.dataset.undoId;
-      if (!confirmDialog('Undo check-in? The token number will be voided and not reused.')) return;
-      try {
-        await api.undoCheckinBooking(bId);
-        showToast('Check-in undone. Status set back to pending.', 'info');
-        await loadDoctorCheckinData();
-        await loadWorkloadData();
-      } catch (err) {
-        showToast('Undo failed: ' + err.message, 'error');
       }
     });
   });
@@ -494,7 +436,7 @@ function filterCheckinTable(query) {
 }
 
 function printTokenSlip(booking, tokenNum) {
-  if (!tokenNum || tokenNum <= 0) return; // don't print for placeholder tokens
+  if (!tokenNum || tokenNum <= 0) return;
   sessionStorage.setItem('print_token_data', JSON.stringify({
     ...booking,
     token_number: tokenNum,
@@ -504,7 +446,259 @@ function printTokenSlip(booking, tokenNum) {
   window.open('./print-token.html', '_blank', 'width=420,height=600');
 }
 
-// --- Search functionality ---
+// =========================================================
+// 3. MODERN LIST VIEW MODAL
+// Shows ONLY patients who are checked in today, in token order.
+// Action buttons: Checked In -> In Progress -> Complete -> Checkout (+ Undo)
+// =========================================================
+async function openModernListModal() {
+  $('modern-list-modal').classList.add('open');
+  $('mlv-search-input').value = '';
+  await loadModernListData();
+}
+
+async function loadModernListData() {
+  const docId = $('mlv-doctor-filter').value || null;
+  const tbody = $('mlv-table').querySelector('tbody');
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="8" style="text-align:center;padding:28px;">⏳ Loading checked-in queue...</td></tr>`;
+
+  try {
+    checkedInPatients = await api.getReceptionBookings(docId, currentDate, 'modern_list');
+    $('mlv-count-badge').textContent = `${checkedInPatients.length} Patients`;
+    renderModernListTable(checkedInPatients);
+  } catch (err) {
+    console.error('loadModernListData error:', err);
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="8" style="color:#ef4444;">Failed to load queue: ${err.message}</td></tr>`;
+  }
+}
+
+function renderModernListTable(patients) {
+  const tbody = $('mlv-table').querySelector('tbody');
+
+  if (!patients || patients.length === 0) {
+    tbody.innerHTML = `
+      <tr class="empty-row">
+        <td colspan="8" style="text-align:center;padding:36px;color:#64748b;">
+          No patients checked in today yet. Click <strong>"📅 From Booking"</strong> to check in arriving patients.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML = patients.map((b, idx) => {
+    const p = b.patient || {};
+    const patientName = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Patient';
+    const timeFormatted = b.slot_time_formatted || b.slot_time || '—';
+    const tokenDisplay = b.token_number ? `#${b.token_number}` : (b.token_code || '—');
+
+    // Workflow actions based on status
+    let actionHtml = '';
+    const st = b.status;
+
+    if (st === 'checked_in') {
+      actionHtml = `
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+          <button class="btn btn--primary btn--sm" data-action="in_process" data-id="${b.id}">
+            ▶ In Progress
+          </button>
+          <button class="btn btn--secondary btn--sm" data-action="undo_checkin" data-id="${b.id}" title="Undo Check-in (voids token)">
+            ↩
+          </button>
+        </div>`;
+    } else if (st === 'in_process') {
+      actionHtml = `
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+          <button class="btn btn--success btn--sm" data-action="completed" data-id="${b.id}" style="background:#10b981;color:#fff;">
+            ✓ Complete
+          </button>
+          <button class="btn btn--secondary btn--sm" data-action="undo_to_checked_in" data-id="${b.id}" title="Revert to Checked In">
+            ↩
+          </button>
+        </div>`;
+    } else if (st === 'completed') {
+      actionHtml = `
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+          <button class="btn btn--warning btn--sm" data-action="checkout" data-id="${b.id}" style="background:#f59e0b;color:#fff;font-weight:700;">
+            ➜ Checkout
+          </button>
+          <button class="btn btn--secondary btn--sm" data-action="undo_to_in_process" data-id="${b.id}" title="Revert to In Progress">
+            ↩
+          </button>
+        </div>`;
+    } else if (st === 'checked_out') {
+      actionHtml = `
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span class="status-pill status--checked-out" style="font-size:.72rem;">📤 In Counseling Queue</span>
+          <button class="btn btn--secondary btn--sm" data-action="undo_to_completed" data-id="${b.id}" title="Undo Checkout">
+            ↩
+          </button>
+        </div>`;
+    } else if (st === 'in_counseling') {
+      actionHtml = `<span class="status-pill status--in-counseling" style="font-size:.72rem;">💬 In Counseling</span>`;
+    } else if (st === 'procedure_done') {
+      actionHtml = `<span class="status-pill status--procedure-done" style="font-size:.72rem;">🎯 Procedure Done</span>`;
+    } else {
+      actionHtml = `<span class="status-pill ${getStatusClass(st)}">${getStatusLabel(st)}</span>`;
+    }
+
+    return `
+      <tr data-mlv-id="${b.id}">
+        <td>
+          <span style="font-size:1.05rem;font-weight:800;color:#1e40af;background:#dbeafe;padding:3px 10px;border-radius:6px;">
+            ${tokenDisplay}
+          </span>
+        </td>
+        <td>
+          <div class="slot-time-pill">${timeFormatted}</div>
+          ${b.check_in_time ? `<div style="font-size:.7rem;color:#059669;margin-top:2px;">In: ${formatTimestamp(b.check_in_time)}</div>` : ''}
+        </td>
+        <td>
+          <div style="font-weight:700;color:#0f172a;">${patientName}</div>
+          <div style="font-size:.75rem;color:#64748b;margin-top:2px;">
+            📞 ${p.full_phone || '—'}
+            ${p.patient_mrn ? `&nbsp;·&nbsp; 🆔 ${p.patient_mrn}` : ''}
+          </div>
+        </td>
+        <td>${b.doctor_name || 'Dr Zarin Khan'}</td>
+        <td>
+          <span class="badge ${b.reservation_type === 'Walk-in' ? 'badge--amber' : 'badge--teal'}">
+            ${b.reservation_type || 'Appointment'}
+          </span>
+        </td>
+        <td><span class="badge badge--gray">${b.purpose || 'Consultation'}</span></td>
+        <td style="text-align:center;">
+          <span class="status-pill ${getStatusClass(st)}">${getStatusLabel(st)}</span>
+        </td>
+        <td style="text-align:center;">${actionHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function handleModernListAction(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+
+  const action = btn.dataset.action;
+  const bookingId = btn.dataset.id;
+  if (!bookingId) return;
+
+  btn.disabled = true;
+
+  try {
+    if (action === 'in_process') {
+      await api.advanceBookingStatus(bookingId, 'in_process');
+      showToast('Patient consultation marked In Progress.', 'info');
+    } else if (action === 'completed') {
+      await api.advanceBookingStatus(bookingId, 'completed');
+      showToast('Patient consultation marked Complete.', 'success');
+    } else if (action === 'checkout') {
+      const ok = confirmDialog('Hand over patient to Counseling? This moves the patient to the Counseling Waiting list.');
+      if (!ok) {
+        btn.disabled = false;
+        return;
+      }
+      await api.advanceBookingStatus(bookingId, 'checked_out');
+      showToast('✅ Patient Checked Out! Handed over to Counseling.', 'success');
+    } else if (action === 'undo_checkin') {
+      const ok = confirmDialog('Undo check-in? The token will be voided and not reused.');
+      if (!ok) {
+        btn.disabled = false;
+        return;
+      }
+      await api.undoCheckinBooking(bookingId);
+      showToast('Check-in undone. Patient returned to Booked list.', 'info');
+    } else if (action === 'undo_to_checked_in') {
+      await api.advanceBookingStatus(bookingId, 'checked_in');
+      showToast('Status reverted to Checked In.', 'info');
+    } else if (action === 'undo_to_in_process') {
+      await api.advanceBookingStatus(bookingId, 'in_process');
+      showToast('Status reverted to In Progress.', 'info');
+    } else if (action === 'undo_to_completed') {
+      await api.advanceBookingStatus(bookingId, 'completed');
+      showToast('Checkout undone. Reverted to Completed.', 'info');
+    }
+
+    await loadModernListData();
+    await loadWorkloadData();
+  } catch (err) {
+    showToast('Action failed: ' + err.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function filterModernListTable(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#mlv-table tbody tr');
+  rows.forEach(tr => {
+    if (tr.classList.contains('empty-row')) return;
+    const text = tr.textContent.toLowerCase();
+    tr.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+// =========================================================
+// 4. WAITING LIST MODAL
+// =========================================================
+async function openWaitingListModal() {
+  $('waiting-list-modal').classList.add('open');
+  await loadWaitingListData();
+}
+
+async function loadWaitingListData() {
+  const tbody = $('waiting-list-table').querySelector('tbody');
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="6" style="text-align:center;padding:24px;">⏳ Loading waiting list...</td></tr>`;
+
+  try {
+    waitingListItems = await api.getWaitingList(currentDate);
+    const activeItems = waitingListItems.filter(w => w.status === 'waiting');
+    $('wl-count-badge').textContent = `${activeItems.length} Waiting`;
+
+    if (activeItems.length === 0) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="6" style="text-align:center;padding:28px;color:#64748b;">No patients currently on waiting list for today.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = activeItems.map((w, idx) => {
+      const p = w.patient || {};
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || w.patient_name || 'Patient';
+      return `
+        <tr>
+          <td><strong>${idx + 1}</strong></td>
+          <td>
+            <div style="font-weight:700;">${name}</div>
+            <div style="font-size:.75rem;color:#64748b;">MR: ${p.patient_mrn || '—'}</div>
+          </td>
+          <td>${p.full_phone || w.phone || '—'}</td>
+          <td>${w.doctor_name || '—'}</td>
+          <td style="font-size:.8rem;color:#64748b;">${w.notes || '—'}</td>
+          <td style="text-align:center;">
+            <button class="btn btn--primary btn--sm" data-convert-wl="${w.id}">
+              📋 Book
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('[data-convert-wl]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = activeItems.find(x => x.id === btn.dataset.convertWl);
+        closeModal('waiting-list-modal');
+        if (item) {
+          openQuickBookModal('Appointment', item);
+        }
+      });
+    });
+  } catch (err) {
+    console.error('loadWaitingListData error:', err);
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6" style="color:#ef4444;">Failed to load waiting list.</td></tr>`;
+  }
+}
+
+// =========================================================
+// 5. SEARCH RESULTS
+// =========================================================
 async function performSearch() {
   const q = $('reception-search-input').value.trim();
   if (!q) return;
@@ -583,22 +777,45 @@ function applyAdvancedFilters() {
   performSearch();
 }
 
-// --- Quick Book Modal ---
-function openQuickBookModal(resType = 'Appointment') {
-  $('qb-res-type').value = resType;
+// =========================================================
+// 6. QUICK BOOK MODAL (Appointment / Walk-in / Waiting)
+// =========================================================
+function openQuickBookModal(resType = 'Appointment', prefill = null) {
+  $('qb-res-type').value = resType === 'Waiting' ? 'Appointment' : resType;
+  $('qb-is-waiting').value = resType === 'Waiting' ? 'true' : 'false';
   $('qb-error').classList.add('hidden');
-  $('qb-time').textContent = resType === 'Walk-in' ? 'Walk-in Entry' : 'Next Available';
+
+  $('qb-title').textContent = resType === 'Waiting'
+    ? '⏳ ADD PATIENT TO WAITING LIST'
+    : `📅 QUICK BOOK PATIENT (${resType.toUpperCase()})`;
+
+  $('qb-time').textContent = resType === 'Walk-in'
+    ? 'Walk-in Entry'
+    : (resType === 'Waiting' ? 'Waiting List' : 'Next Available');
 
   // Populate doctor select
   const docSelect = $('qb-doc-select');
   docSelect.innerHTML = activeDoctors.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-  if (selectedDoctorId) docSelect.value = selectedDoctorId;
+  if (prefill?.doctor_id) docSelect.value = prefill.doctor_id;
+  else if (selectedDoctorId) docSelect.value = selectedDoctorId;
 
   onQuickBookDoctorChange();
 
   // Populate Purpose & Source
   $('qb-purpose').innerHTML = lookups.purpose.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
   $('qb-source').innerHTML = lookups.source.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+
+  if (prefill) {
+    const p = prefill.patient || {};
+    $('qb-first-name').value = p.first_name || prefill.patient_name || '';
+    $('qb-last-name').value = p.last_name || '';
+    $('qb-phone-prefix').value = p.phone_prefix || '300';
+    $('qb-phone-num').value = p.phone_number || (p.full_phone ? p.full_phone.slice(5) : '');
+    $('qb-cnic').value = p.cnic || '';
+  } else {
+    $('qb-form').reset();
+    $('qb-phone-prefix').value = '300';
+  }
 
   $('quick-book-modal').classList.add('open');
   setTimeout(() => $('qb-first-name').focus(), 100);
@@ -627,6 +844,31 @@ async function handleQuickBookSubmit(e) {
   const docId = $('qb-doc-select').value;
   const shiftId = $('qb-shift-select').value;
   const resType = $('qb-res-type').value;
+  const isWaiting = $('qb-is-waiting').value === 'true';
+
+  if (isWaiting) {
+    try {
+      await api.createWaitingListItem({
+        doctor_id: docId,
+        shift_id: shiftId,
+        date: currentDate,
+        patient_name: `${$('qb-first-name').value.trim()} ${$('qb-last-name').value.trim()}`.trim(),
+        phone: `+92${$('qb-phone-prefix').value.trim()}${$('qb-phone-num').value.trim()}`,
+        notes: $('qb-purpose').value,
+        created_by: user.id
+      });
+      closeModal('quick-book-modal');
+      showToast('✅ Added to Waiting List.', 'success');
+      return;
+    } catch (err) {
+      $('qb-error').textContent = err.message || 'Failed to add to waiting list.';
+      $('qb-error').classList.remove('hidden');
+      return;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Confirm Booking';
+    }
+  }
 
   const payload = {
     doctor_id: docId,
@@ -654,10 +896,9 @@ async function handleQuickBookSubmit(e) {
     closeModal('quick-book-modal');
     showToast(`✅ ${resType} booked! Use "From Booking" to check in.`, 'success');
     await loadWorkloadData();
-    if (selectedDoctorId === docId && $('doctor-checkin-modal').classList.contains('open')) {
+    if ($('doctor-checkin-modal').classList.contains('open')) {
       await loadDoctorCheckinData();
     }
-    // Reset form
     $('qb-form').reset();
   } catch (err) {
     $('qb-error').textContent = err.message || 'Booking failed.';
@@ -668,7 +909,9 @@ async function handleQuickBookSubmit(e) {
   }
 }
 
-// --- Realtime Event Handler ---
+// =========================================================
+// REALTIME EVENT HANDLER
+// =========================================================
 function onRealtimeEvent({ event, record }) {
   setUpdatedTimestamp();
 
@@ -679,6 +922,9 @@ function onRealtimeEvent({ event, record }) {
   loadWorkloadData();
   if ($('doctor-checkin-modal').classList.contains('open')) {
     loadDoctorCheckinData();
+  }
+  if ($('modern-list-modal').classList.contains('open')) {
+    loadModernListData();
   }
   if (!$('search-results-section').classList.contains('hidden')) {
     performSearch();

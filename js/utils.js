@@ -129,14 +129,17 @@ export function formatPhone(b) {
 
 /** Status display config */
 export const STATUS_CONFIG = {
-  pending:    { label: 'Pending',     cls: 'status--pending',    icon: '🕐' },
-  checked_in: { label: 'Checked In',  cls: 'status--checked-in', icon: '✅' },
-  in_process: { label: 'In Process',  cls: 'status--in-process', icon: '⚙️' },
-  completed:  { label: 'Completed',   cls: 'status--completed',  icon: '✔️' },
-  absent:     { label: 'Absent',      cls: 'status--absent',     icon: '❌' },
-  follow_up:  { label: 'Follow Up',   cls: 'status--follow-up',  icon: '🔄' },
-  cancelled:  { label: 'Cancelled',   cls: 'status--cancelled',  icon: '🚫' },
-  rescheduled:{ label: 'Rescheduled', cls: 'status--rescheduled',icon: '📅' },
+  pending:        { label: 'Booked',          cls: 'status--pending',        icon: '🕐' },
+  checked_in:     { label: 'Checked In',      cls: 'status--checked-in',     icon: '✅' },
+  in_process:     { label: 'In Progress',     cls: 'status--in-process',     icon: '⚙️' },
+  completed:      { label: 'Completed',       cls: 'status--completed',      icon: '✔️' },
+  checked_out:    { label: 'Checked Out',     cls: 'status--checked-out',    icon: '📤' },
+  in_counseling:  { label: 'In Counseling',   cls: 'status--in-counseling',  icon: '💬' },
+  procedure_done: { label: 'Procedure Done',  cls: 'status--procedure-done', icon: '🎯' },
+  absent:         { label: 'Absent',          cls: 'status--absent',         icon: '❌' },
+  follow_up:      { label: 'Follow Up',       cls: 'status--follow-up',      icon: '🔄' },
+  cancelled:      { label: 'Cancelled',       cls: 'status--cancelled',      icon: '🚫' },
+  rescheduled:    { label: 'Rescheduled',     cls: 'status--rescheduled',    icon: '📅' },
 };
 
 export function getStatusLabel(status) {

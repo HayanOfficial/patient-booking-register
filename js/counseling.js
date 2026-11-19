@@ -4,7 +4,7 @@
 // ==============================================================================
 import { requireAuth, logout } from './auth.js';
 import { api } from './api.js';
-import { showToast, confirmDialog, formatTimestamp, formatWaitTime, debounce } from './utils.js';
+import { showToast, confirmDialog, formatTimestamp, formatWaitTime, debounce, todayDateString } from './utils.js';
 import { startRealtime } from './realtime.js';
 
 // --- Auth ---
@@ -29,6 +29,10 @@ let _waitTimerHandle = null;
 // ==============================================================================
 async function init() {
   $('hdr-username').textContent = user.full_name || user.username;
+  if (user.role !== 'admin') {
+    $('counseling-nav-reception')?.remove();
+    $('counseling-nav-booking')?.remove();
+  }
   $('logout-btn').addEventListener('click', () => logout());
   $('user-menu-btn').addEventListener('click', e => {
     e.stopPropagation();
@@ -136,7 +140,7 @@ async function loadDoctorFilter() {
 // ==============================================================================
 async function refreshQueue() {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayDateString();
     _queue = await api.getCounselingQueue(today, _doctorFilter || null);
     renderStatCards();
     renderTable();
@@ -572,28 +576,25 @@ function reprintSlip(sessionId, bookingId) {
 // REALTIME EVENT HANDLER
 // ==============================================================================
 function onRealtimeEvent(evt) {
-  const { event, record } = evt;
+  const { event, record, table } = evt;
 
-  // A new counseling session was auto-created when receptionist checked in a patient
-  if (event === 'INSERT' && evt.table === 'counseling_sessions') {
-    // Refresh queue to pick up the new row
+  // New patient arrived via checkout from reception or new counseling session
+  if (
+    (event === 'INSERT' && table === 'counseling_sessions') ||
+    (event === 'booking_updated' && record?.status === 'checked_out') ||
+    (event === 'counseling_change' && record?.status === 'waiting')
+  ) {
     refreshQueue();
-    showToast('New patient arrived for counseling.', 'info');
+    showToast('📢 New patient arrived for counseling!', 'info');
     return;
   }
 
-  if (event === 'UPDATE' && evt.table === 'counseling_sessions') {
-    // Patch in-memory queue
-    const idx = _queue.findIndex(s => s.session_id === record?.id);
-    if (idx !== -1) {
-      _queue[idx].counseling_status = record.status;
-    } else {
-      // Could be a new session for a booking not yet in our view — refresh
-      refreshQueue();
-      return;
-    }
-    renderStatCards();
-    renderTable();
+  if (
+    (event === 'UPDATE' && table === 'counseling_sessions') ||
+    event === 'counseling_change' ||
+    event === 'booking_updated'
+  ) {
+    refreshQueue();
     return;
   }
 

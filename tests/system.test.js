@@ -385,37 +385,40 @@ await runAsyncTest('20 parallel check-ins give unique consecutive numbers 1..20'
 });
 
 // ------------------------------------------------------------------------------
-// TEST 8: Check-in creates counseling session only for purposes that require counseling
+// TEST 8: Checkout creates exactly one counseling entry, and double checkout is idempotent
 // ------------------------------------------------------------------------------
-await runAsyncTest('Check-in creates counseling session only for purposes requiring counseling', async () => {
+await runAsyncTest('Checkout creates exactly one counseling entry; double checkout is idempotent', async () => {
   saveSession(adminUser);
   const testDate = '2026-11-25';
 
-  // Booking with purpose = Consultation (requires counseling)
   const b1 = await api.createBookingAtomic({
     doctor_id: 'doc-counsel-test', shift_id: 'shift-counsel-test', booking_date: testDate,
-    purpose: 'Consultation', first_name: 'Patient-Needs-Counseling'
+    purpose: 'Consultation', first_name: 'Patient-Checkout-Test'
   });
 
-  // Booking with purpose = Emergency (does not require counseling)
-  const b2 = await api.createBookingAtomic({
-    doctor_id: 'doc-counsel-test', shift_id: 'shift-counsel-test', booking_date: testDate,
-    purpose: 'Emergency', first_name: 'Patient-No-Counseling'
-  });
-
-  // Check in both bookings as receptionist
+  // Receptionist checks in
   saveSession(receptionistUser);
   await api.checkinBooking(b1.id);
-  await api.checkinBooking(b2.id);
+
+  // Advance to In Progress -> Complete -> Checkout
+  await api.advanceBookingStatus(b1.id, 'in_process');
+  await api.advanceBookingStatus(b1.id, 'completed');
+
+  // Checkout (handover to counseling)
+  const co1 = await api.advanceBookingStatus(b1.id, 'checked_out');
+  assert.strictEqual(co1.booking.status, 'checked_out');
+
+  // Double checkout (idempotent)
+  const co2 = await api.advanceBookingStatus(b1.id, 'checked_out');
+  assert.strictEqual(co2.booking.status, 'checked_out');
 
   // Counselor checks the queue
   saveSession(counselorUser);
   const queue = await api.getCounselingQueue(testDate);
-  const inQueue1 = queue.some(q => q.booking_id === b1.id);
-  const inQueue2 = queue.some(q => q.booking_id === b2.id);
+  const matching = queue.filter(q => q.booking_id === b1.id);
 
-  assert.strictEqual(inQueue1, true, 'Booking with Consultation must appear in counseling queue');
-  assert.strictEqual(inQueue2, false, 'Booking with Emergency must NOT appear in counseling queue');
+  assert.strictEqual(matching.length, 1, 'Checkout must create exactly one counseling entry');
+  assert.strictEqual(matching[0].counseling_status, 'waiting');
 });
 
 // ------------------------------------------------------------------------------
@@ -594,6 +597,74 @@ await runAsyncTest('Procedure slip uses the exact same token number as reception
   // Fetch booking details for the slip
   const slipData = await api.getBookingWithPatient(booking.id);
   assert.strictEqual(slipData.token_number, receptionToken, 'Slip token number must match reception check-in token exactly');
+});
+
+// ------------------------------------------------------------------------------
+// TEST 13: Operator cannot check in or see counseling; Admin has full authority
+// ------------------------------------------------------------------------------
+await runAsyncTest('Operator cannot check in or see counseling; Admin has full authority', async () => {
+  saveSession(operatorUser);
+  const testDate = '2026-11-30';
+
+  // Operator creates booking
+  const b = await api.createBookingAtomic({
+    doctor_id: 'doc-op-test', shift_id: 'shift-op-test', booking_date: testDate,
+    reservation_type: 'Appointment', purpose: 'Consultation', first_name: 'Op-Booking'
+  });
+  assert.ok(b.id);
+  assert.strictEqual(b.token_number, null, 'No token exists at booking time');
+
+  // Operator tries to check in -> REJECTED
+  let opCheckinBlocked = false;
+  try {
+    await api.checkinBooking(b.id);
+  } catch (err) {
+    opCheckinBlocked = true;
+    assert.match(err.message, /Unauthorized|Only Receptionist/i);
+  }
+  assert.strictEqual(opCheckinBlocked, true, 'Operator must not be allowed to check in');
+
+  // Operator tries to advance status -> REJECTED
+  let opAdvanceBlocked = false;
+  try {
+    await api.advanceBookingStatus(b.id, 'in_process');
+  } catch (err) {
+    opAdvanceBlocked = true;
+    assert.match(err.message, /Unauthorized|Operator/i);
+  }
+  assert.strictEqual(opAdvanceBlocked, true, 'Operator must not be allowed to advance status');
+
+  // Operator tries to view counseling queue -> REJECTED
+  let opQueueBlocked = false;
+  try {
+    await api.getCounselingQueue(testDate);
+  } catch (err) {
+    opQueueBlocked = true;
+    assert.match(err.message, /Unauthorized|Counselor/i);
+  }
+  assert.strictEqual(opQueueBlocked, true, 'Operator must not be allowed to view counseling queue');
+
+  // Admin has full authority: can check in, advance, undo, reprint, and delete
+  saveSession(adminUser);
+  const checkinRes = await api.checkinBooking(b.id);
+  assert.ok(checkinRes.token_number > 0);
+
+  const advRes = await api.advanceBookingStatus(b.id, 'in_process');
+  assert.strictEqual(advRes.booking.status, 'in_process');
+
+  const compRes = await api.advanceBookingStatus(b.id, 'completed');
+  assert.strictEqual(compRes.booking.status, 'completed');
+
+  const coRes = await api.advanceBookingStatus(b.id, 'checked_out');
+  assert.strictEqual(coRes.booking.status, 'checked_out');
+
+  // Admin can view counseling queue
+  const adminQueue = await api.getCounselingQueue(testDate);
+  assert.ok(adminQueue.some(q => q.booking_id === b.id));
+
+  // Admin can reprint token
+  const reprintRes = await api.reprintToken(b.id);
+  assert.ok(reprintRes.token_number > 0);
 });
 
 console.log(`\n========================================`);

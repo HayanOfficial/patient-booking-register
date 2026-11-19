@@ -53,10 +53,16 @@ async function init() {
   if (user.role === 'operator') {
     $('hdr-reception-link')?.remove();
     $('menu-reception-link')?.remove();
+    $('menu-counseling-link')?.remove();
+    document.querySelector('a[href="./reports.html"]')?.remove();
+    document.querySelector('[data-tab="booking-analytics"]')?.remove();
+    document.querySelector('[data-tab="booking-graph"]')?.remove();
   }
   if (user.role !== 'admin') {
     const ul = $('menu-users-link'); if (ul) ul.style.display = 'none';
     const sl = $('menu-settings-link'); if (sl) sl.style.display = 'none';
+    const cl = $('menu-counseling-link'); if (cl && user.role !== 'counselor') cl.style.display = 'none';
+    const rl = document.querySelector('a[href="./reports.html"]'); if (rl) rl.style.display = 'none';
   }
 
   // Date navigation
@@ -369,13 +375,17 @@ function renderBookingTable() {
       'Relative': 'purple'
     }[b.called_as] || 'gray';
 
-    const visitInfo = (b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed')
-      ? `<button class="status-pill ${getStatusClass(b.status)}" data-booking="${b.id}" data-action="status-menu">${getStatusLabel(b.status)}</button>
-         ${b.check_in_time ? `<div style="font-size:.7rem;color:#6b7280;margin-top:3px;">In: ${formatTimestamp(b.check_in_time)}</div>` : ''}`
-      : `<button class="status-pill ${getStatusClass(b.status)}" data-booking="${b.id}" data-action="status-menu">${getStatusLabel(b.status)}</button>`;
+    const isOperator = user.role === 'operator';
+    const visitInfo = isOperator
+      ? `<span class="status-pill ${getStatusClass(b.status)}">${getStatusLabel(b.status)}</span>`
+      : ((b.status === 'checked_in' || b.status === 'in_process' || b.status === 'completed' || b.status === 'checked_out')
+        ? `<button class="status-pill ${getStatusClass(b.status)}" data-booking="${b.id}" data-action="status-menu">${getStatusLabel(b.status)}</button>
+           ${b.check_in_time ? `<div style="font-size:.7rem;color:#6b7280;margin-top:3px;">In: ${formatTimestamp(b.check_in_time)}</div>` : ''}`
+        : `<button class="status-pill ${getStatusClass(b.status)}" data-booking="${b.id}" data-action="status-menu">${getStatusLabel(b.status)}</button>`);
 
-    const canEdit   = user.role === 'admin' || user.role === 'receptionist' || (user.role === 'operator' && b.reservation_type === 'Appointment');
+    const canEdit   = user.role === 'admin' || user.role === 'receptionist' || isOperator;
     const canDelete = user.role === 'admin';
+    const canPrintToken = user.role === 'admin' || user.role === 'receptionist';
 
     return `<tr data-booking-id="${b.id}">
       <td style="color:#6b7280;font-size:.82rem;">${slot.index}</td>
@@ -391,7 +401,7 @@ function renderBookingTable() {
           ${p.city ? `<span>📍 ${p.city}${p.area ? ' ' + p.area : ''}</span>` : ''}
           ${p.age ? `<span>🎂 ${p.age} yr</span>` : ''}
           ${p.cnic ? `<span style="color:#9ca3af;">🆔 ${p.cnic}</span>` : ''}
-          ${b.token_number ? `<span style="font-weight:700;color:#1e40af;background:#dbeafe;padding:1px 6px;border-radius:4px;">Token #${b.token_number}</span>` : '<span style="font-size:.75rem;color:#9ca3af;">(No token yet)</span>'}
+          ${!isOperator && b.token_number ? `<span style="font-weight:700;color:#1e40af;background:#dbeafe;padding:1px 6px;border-radius:4px;">Token #${b.token_number}</span>` : ''}
         </div>
       </td>
       <td><span class="source-badge badge badge--blue" style="background:#eff6ff;color:#1d4ed8;">${b.source || '—'}</span></td>
@@ -402,19 +412,22 @@ function renderBookingTable() {
         <div class="actions-cell">
           <button class="action-btn" title="Call" onclick="window.open('tel:${p.full_phone || ''}')">📞</button>
           ${canEdit ? `<button class="action-btn" title="Edit booking" data-booking="${b.id}" data-action="edit">✏️</button>` : ''}
-          <button class="action-btn" title="Print token" data-booking="${b.id}" data-action="print">🖨️</button>
+          ${canPrintToken && b.token_number ? `<button class="action-btn" title="Print token" data-booking="${b.id}" data-action="print">🖨️</button>` : ''}
           <button class="action-btn" title="Patient history" data-booking="${b.id}" data-action="history">📋</button>
           ${canDelete ? `<button class="action-btn action-btn--danger" title="Delete booking" data-booking="${b.id}" data-action="delete">🗑</button>` : ''}
+          ${!isOperator ? `
           <div class="dropdown">
             <button class="action-btn" data-booking="${b.id}" data-action="more">⋯</button>
             <div class="dropdown-menu" id="dm-${b.id}">
-              ${['checked_in','in_process','completed','absent','follow_up','cancelled'].map(s => `
+              ${['checked_in','in_process','completed','checked_out','absent','follow_up','cancelled'].map(s => `
                 <button class="dropdown-item" data-booking="${b.id}" data-action="set-status" data-status="${s}">
                   ${STATUS_CONFIG[s]?.icon || ''} ${getStatusLabel(s)}
                 </button>
               `).join('')}
             </div>
-          </div>
+          </div>` : `
+          <button class="action-btn action-btn--danger" title="Cancel booking" data-booking="${b.id}" data-action="cancel-op">✕</button>
+          `}
         </div>
       </td>
     </tr>`;
@@ -460,6 +473,10 @@ function onTableClick(e) {
     printToken(booking);
   } else if (action === 'history') {
     openHistoryModal(booking);
+  } else if (action === 'cancel-op') {
+    if (confirmDialog('Cancel this appointment?')) {
+      updateStatus(bookingId, 'cancelled');
+    }
   } else if (action === 'delete') {
     deleteBooking(bookingId);
   }
@@ -624,6 +641,10 @@ async function confirmBooking() {
 
 // --- Status Update & Step 4 Atomic Check-in ---
 async function updateStatus(bookingId, status) {
+  if (user.role === 'operator' && status !== 'cancelled' && status !== 'rescheduled') {
+    showToast('Unauthorized: Operator cannot check in or advance patient status.', 'error');
+    return;
+  }
   try {
     if (status === 'checked_in') {
       const res = await api.checkinBooking(bookingId);

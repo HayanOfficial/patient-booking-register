@@ -23,13 +23,12 @@
       </div>
     </div>
 
-    <!-- Permitted Header Buttons Only (No Finance / Procedures) -->
+    <!-- Permitted Header Buttons Only -->
     <div class="reception-header-actions">
       <button class="btn-amber-from-booking" id="btn-from-booking">📅 From Booking</button>
       <button class="btn-amber-outline" id="btn-from-waiting">⏳ From Waiting List</button>
       <button class="btn-blue-add-waiting" id="btn-add-waiting">👤+ Add Waiting</button>
-      <a href="./counseling.html" class="btn-amber-outline" style="text-decoration:none;" id="btn-nav-counseling">🩺 Counseling</a>
-      <a href="./booking.html" class="btn-modern-list">📅 Modern List View</a>
+      <button class="btn-modern-list" id="btn-modern-list">📋 Modern List View</button>
 
       <!-- User menu -->
       <div class="dropdown">
@@ -37,9 +36,9 @@
           👤 <span id="hdr-username">Staff</span> ▾
         </button>
         <div class="dropdown-menu" id="user-menu">
-          <a href="./booking.html" class="dropdown-item">📋 Booking Sheet</a>
-          <a href="./counseling.html" class="dropdown-item">🩺 Counseling Dashboard</a>
-          <a href="./reports.html" class="dropdown-item">📊 Reports</a>
+          <a href="./booking.html" class="dropdown-item" id="nav-booking-link">📋 Booking Sheet</a>
+          <a href="./counseling.html" class="dropdown-item" id="nav-counseling-link">🩺 Counseling Dashboard</a>
+          <a href="./reports.html" class="dropdown-item" id="nav-reports-link">📊 Reports</a>
           <a href="./settings.html" class="dropdown-item" id="nav-settings-link">⚙️ Settings</a>
           <a href="./users.html" class="dropdown-item" id="nav-users-link">👥 Users</a>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0;" />
@@ -90,7 +89,7 @@
       </div>
     </div>
 
-    <!-- Appointment Types Section -->
+    <!-- Appointment Types Section (A / W Shortcuts) -->
     <div>
       <div class="reception-section-header" style="margin-bottom:12px;">
         📅 Appointment Types <span style="font-size:.8rem;color:#64748b;font-weight:500;">(press first letter · A, W...)</span>
@@ -158,7 +157,7 @@
   </main>
 
   <!-- ==============================================================================
-       SELECT DOCTOR MODAL (Matching /reference/booking.png)
+       1. SELECT DOCTOR MODAL (Matching /reference/booking.png)
        ============================================================================== -->
   <div class="modal-overlay" id="select-doctor-modal">
     <div class="modal" style="max-width:850px;padding:0;overflow:hidden;">
@@ -197,18 +196,19 @@
   </div>
 
   <!-- ==============================================================================
-       DOCTOR CHECK-IN LIST VIEW MODAL (Matching /reference/booking checkin.png)
+       2. FROM BOOKING: CHECK-IN DESK MODAL (Matching /reference/booking checkin.png)
+       Shows today's Booked patients with one Check-in button per row.
        ============================================================================== -->
   <div class="modal-overlay" id="doctor-checkin-modal">
     <div class="modal" style="max-width:1050px;padding:0;overflow:hidden;">
       <div class="doctor-modal-banner">
         <div class="doctor-modal-banner-title">
           <button class="btn btn--secondary btn--sm" id="btn-back-to-doctors" style="margin-right:8px;background:rgba(255,255,255,0.2);color:#fff;border:none;">← Back</button>
-          <span>Select Doctor</span>
+          <span>From Booking — Check-in Desk</span>
         </div>
         <div style="font-size:.9rem;font-weight:700;display:flex;align-items:center;gap:12px;">
           <span id="checkin-doc-name">Doctor</span>
-          <span style="font-size:.8rem;opacity:.9;" id="checkin-date">2026-11-18</span>
+          <span style="font-size:.8rem;opacity:.9;" id="checkin-date">2026-11-19</span>
           <button class="modal-close" id="doctor-checkin-close" style="color:#ffffff;">✕</button>
         </div>
       </div>
@@ -217,13 +217,10 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
           <input type="text" id="checkin-patient-search" placeholder="Search patient name, phone, MR#..." style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;width:280px;" />
 
-          <div class="reception-tabs-wrap">
-            <button class="reception-tab-btn active" id="tab-checkin-pending" data-subtab="pending">
-              🕒 Pending <span class="tab-count-badge" id="badge-pending-count">0</span>
-            </button>
-            <button class="reception-tab-btn" id="tab-checkin-checked" data-subtab="checked_in">
-              ✓ Checked In <span class="tab-count-badge" id="badge-checked-count">0</span>
-            </button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:.85rem;font-weight:700;color:#1e40af;background:#dbeafe;padding:4px 12px;border-radius:9999px;">
+              Booked Patients (<span id="badge-pending-count">0</span>)
+            </span>
           </div>
         </div>
 
@@ -251,12 +248,108 @@
     </div>
   </div>
 
-  <!-- Quick Book Modal -->
+  <!-- ==============================================================================
+       3. MODERN LIST VIEW MODAL
+       Shows ONLY checked-in patients today in token order with sequential action buttons:
+       Checked In -> In Progress -> Complete -> Checkout (+ Undo)
+       ============================================================================== -->
+  <div class="modal-overlay" id="modern-list-modal">
+    <div class="modal" style="max-width:1150px;padding:0;overflow:hidden;">
+      <div class="doctor-modal-banner" style="background:linear-gradient(135deg, #1e40af 0%, #1d4ed8 50%, #2563eb 100%);">
+        <div class="doctor-modal-banner-title">
+          <span>📋 Modern List View — Checked-In Queue</span>
+          <span style="font-size:.8rem;font-weight:600;background:rgba(255,255,255,0.2);padding:2px 10px;border-radius:9999px;" id="mlv-count-badge">0 Patients</span>
+        </div>
+        <div style="font-size:.85rem;display:flex;align-items:center;gap:12px;">
+          <span id="mlv-date">Today</span>
+          <button class="modal-close" id="modern-list-close" style="color:#ffffff;">✕</button>
+        </div>
+      </div>
+
+      <div style="padding:14px 20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="text" id="mlv-search-input" placeholder="Search by Token, Name, Phone, MR#..." style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;width:280px;" />
+            <select class="form-select form-select--sm" id="mlv-doctor-filter" style="width:180px;">
+              <option value="">All Doctors</option>
+            </select>
+          </div>
+          <div style="font-size:.78rem;color:#64748b;">
+            Checked In ➔ In Progress ➔ Complete ➔ Checkout (Counseling)
+          </div>
+        </div>
+
+        <div class="table-wrap" style="max-height:500px;overflow-y:auto;">
+          <table class="booking-table" id="mlv-table">
+            <thead>
+              <tr>
+                <th style="width:75px;">Token#</th>
+                <th style="width:90px;">Time</th>
+                <th>Patient Details</th>
+                <th style="width:120px;">Doctor</th>
+                <th style="width:90px;">Type</th>
+                <th style="width:100px;">Purpose</th>
+                <th style="width:120px;text-align:center;">Status</th>
+                <th style="width:190px;text-align:center;">Workflow Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:10px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;">
+        <button class="btn btn--secondary btn--sm" id="modern-list-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================================================
+       4. WAITING LIST MODAL (From Waiting List)
+       ============================================================================== -->
+  <div class="modal-overlay" id="waiting-list-modal">
+    <div class="modal" style="max-width:850px;padding:0;overflow:hidden;">
+      <div class="doctor-modal-banner" style="background:linear-gradient(135deg, #b45309 0%, #d97706 100%);">
+        <div class="doctor-modal-banner-title">
+          <span>⏳ Waiting List</span>
+          <span style="font-size:.8rem;font-weight:600;background:rgba(255,255,255,0.2);padding:2px 10px;border-radius:9999px;" id="wl-count-badge">0 Waiting</span>
+        </div>
+        <button class="modal-close" id="waiting-list-close" style="color:#ffffff;">✕</button>
+      </div>
+
+      <div style="padding:14px 20px;">
+        <div class="table-wrap" style="max-height:420px;overflow-y:auto;">
+          <table class="booking-table" id="waiting-list-table">
+            <thead>
+              <tr>
+                <th style="width:40px;">#</th>
+                <th>Patient Name</th>
+                <th>Phone</th>
+                <th>Doctor</th>
+                <th>Notes</th>
+                <th style="width:100px;text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:10px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn btn--primary btn--sm" id="wl-add-new-btn">➕ Add New to Waiting List</button>
+        <button class="btn btn--secondary btn--sm" id="waiting-list-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================================================
+       5. QUICK BOOK MODAL (Appointment / Walk-in / Add Waiting)
+       ============================================================================== -->
   <div class="modal-overlay" id="quick-book-modal">
     <div class="modal" style="max-width:540px;">
       <div class="qb-header">
         <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div style="font-size:.85rem;font-weight:700;letter-spacing:.05em;color:#78350f;">📅 QUICK BOOK PATIENT</div>
+          <div style="font-size:.85rem;font-weight:700;letter-spacing:.05em;color:#78350f;" id="qb-title">📅 QUICK BOOK PATIENT</div>
           <button class="modal-close" id="qb-close">✕</button>
         </div>
         <div class="qb-time" id="qb-time">Next Available</div>
@@ -268,6 +361,7 @@
           <input type="hidden" id="qb-doctor-id" />
           <input type="hidden" id="qb-shift-id" />
           <input type="hidden" id="qb-res-type" value="Appointment" />
+          <input type="hidden" id="qb-is-waiting" value="false" />
 
           <div class="form-group">
             <label class="form-label">Doctor <span class="required">*</span></label>

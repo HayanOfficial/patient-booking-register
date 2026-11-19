@@ -1076,22 +1076,25 @@ export const api = {
 
   async getActiveProcedures() {
     if (isSupabaseConfigured && supabase) {
+      // Try the RPC first (uses active column, properly indexed)
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_active_procedures');
+      if (!rpcErr && Array.isArray(rpcData)) return rpcData;
+      // Fallback: direct query (handles both 'active' and 'is_active' column names)
       const { data, error } = await supabase
         .from('procedures')
-        .select('*')
+        .select('id, name, category, active, sort_order')
         .is('deleted_at', null)
-        .eq('is_active', true)
         .order('category')
         .order('sort_order');
-      if (!error && data) return data;
+      if (!error && data) return data.filter(p => p.active !== false);
     }
-    // Local fallback: minimal built-in list
+    // Local demo fallback
     return [
-      { id: 'proc-1', name: 'Sleeve Gastrectomy (Laparoscopic)',   category: 'Bariatric Surgery',  is_active: true, sort_order: 1 },
-      { id: 'proc-2', name: 'Roux-en-Y Gastric Bypass',            category: 'Bariatric Surgery',  is_active: true, sort_order: 2 },
-      { id: 'proc-3', name: 'Mini Gastric Bypass',                 category: 'Bariatric Surgery',  is_active: true, sort_order: 3 },
-      { id: 'proc-4', name: 'Laparoscopic Cholecystectomy',        category: 'Laparoscopic Surgery', is_active: true, sort_order: 10 },
-      { id: 'proc-5', name: 'Consultation Fee',                    category: 'Consultation',       is_active: true, sort_order: 60 },
+      { id: 'proc-1', name: 'Sleeve Gastrectomy (Laparoscopic)',           category: 'Bariatric', active: true, sort_order: 1 },
+      { id: 'proc-2', name: 'One-anastomosis gastric bypass (OAGB)',        category: 'Bariatric', active: true, sort_order: 2 },
+      { id: 'proc-3', name: 'Roux-en-Y gastric bypass (RYGB)',             category: 'Bariatric', active: true, sort_order: 3 },
+      { id: 'proc-4', name: 'Laparoscopic cholecystectomy',                category: 'Gallbladder & biliary', active: true, sort_order: 10 },
+      { id: 'proc-5', name: 'Diagnostic laparoscopy, including proceed and revision entries', category: 'Diagnostic & abdominal', active: true, sort_order: 20 },
     ];
   },
 

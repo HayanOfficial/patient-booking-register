@@ -5,6 +5,213 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Counseling Dashboard</title>
   <link rel="stylesheet" href="./css/style.css" />
+  <style>
+    /* ---- Counseling Modal Overlay ---- */
+    .counsel-modal-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .counsel-modal-overlay.hidden { display: none; }
+
+    .counsel-modal {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+      width: 100%;
+      max-width: 760px;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Modal Header */
+    .counsel-modal-header {
+      background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
+      color: #fff;
+      padding: 16px 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .counsel-modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .counsel-modal-subtitle { font-size: .8rem; opacity: .85; }
+
+    /* Patient Summary Chips */
+    .counsel-patient-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 10px 20px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    .counsel-chip {
+      background: #e0e7ff; color: #3730a3;
+      border-radius: 999px; font-size: .72rem; font-weight: 600;
+      padding: 3px 10px;
+    }
+    .counsel-chip.chip--token { background: #d1fae5; color: #065f46; font-size: .85rem; font-weight: 800; }
+    .counsel-chip.chip--doctor { background: #fef3c7; color: #92400e; }
+
+    /* Modal Body */
+    .counsel-modal-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left pane: procedure picker */
+    .counsel-proc-picker {
+      width: 48%;
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .counsel-proc-picker-header {
+      padding: 10px 14px 6px;
+      font-size: .78rem; font-weight: 600; color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+      flex-shrink: 0;
+    }
+    .counsel-proc-search {
+      padding: 8px 12px;
+      border-bottom: 1px solid #f3f4f6;
+      flex-shrink: 0;
+    }
+    .counsel-proc-search input {
+      width: 100%; padding: 6px 10px; border: 1px solid #d1d5db;
+      border-radius: 6px; font-size: .82rem; outline: none;
+    }
+    .counsel-proc-search input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+
+    /* Custom procedure row */
+    .counsel-custom-proc-row {
+      padding: 6px 12px 10px;
+      border-bottom: 1px solid #f3f4f6;
+      flex-shrink: 0;
+    }
+    .counsel-custom-proc-row .custom-row-inner {
+      display: flex; gap: 6px;
+    }
+    .counsel-custom-proc-row input {
+      flex: 1; padding: 5px 8px; border: 1px solid #d1d5db;
+      border-radius: 6px; font-size: .78rem; outline: none;
+    }
+    .counsel-custom-proc-row input:focus { border-color: #3b82f6; }
+
+    .counsel-proc-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 4px 0;
+    }
+    .proc-category-group { margin-bottom: 2px; }
+    .proc-category-label {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: #9ca3af;
+      padding: 6px 12px 2px;
+      position: sticky; top: 0; background: #fff; z-index: 1;
+    }
+    .proc-checkbox-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 12px; cursor: pointer; font-size: .8rem;
+      border-radius: 4px; transition: background .12s;
+    }
+    .proc-checkbox-row:hover { background: #f0f9ff; }
+    .proc-checkbox-row.checked { background: #eff6ff; color: #1d4ed8; }
+    .proc-checkbox { accent-color: #3b82f6; width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* Right pane: selected procedures + notes */
+    .counsel-selected-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .counsel-selected-header {
+      padding: 10px 14px 6px;
+      font-size: .78rem; font-weight: 600; color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+      flex-shrink: 0;
+    }
+    .counsel-selected-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 8px 12px;
+    }
+
+    .selected-proc-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; margin-bottom: 6px;
+      background: #f8fafc; border: 1px solid #e5e7eb;
+      border-radius: 8px;
+    }
+    .selected-proc-name {
+      flex: 1; font-size: .78rem; color: #1f2937; font-weight: 500;
+      word-break: break-word; min-width: 0;
+    }
+    .proc-price-wrap { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .proc-price-wrap span { font-size: .72rem; color: #6b7280; }
+    .proc-price-input {
+      width: 80px; padding: 4px 6px;
+      border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: .82rem; text-align: right; outline: none;
+    }
+    .proc-price-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.12); }
+    .proc-price-input.error { border-color: #ef4444; background: #fef2f2; }
+    .proc-remove-btn {
+      background: none; border: none; cursor: pointer;
+      color: #9ca3af; font-size: .9rem; padding: 2px 4px;
+      border-radius: 4px; transition: color .12s;
+      flex-shrink: 0;
+    }
+    .proc-remove-btn:hover { color: #ef4444; background: #fef2f2; }
+
+    .counsel-empty-msg { color: #9ca3af; font-size: .8rem; text-align: center; padding: 24px 12px; }
+
+    .counsel-total-wrap {
+      padding: 8px 12px;
+      border-top: 1px solid #e5e7eb;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .85rem; font-weight: 700; color: #111827;
+      flex-shrink: 0;
+    }
+
+    /* Notes inside right pane */
+    .counsel-notes-wrap {
+      padding: 8px 12px;
+      border-top: 1px solid #f3f4f6;
+      flex-shrink: 0;
+    }
+    .counsel-notes-wrap label { font-size: .72rem; font-weight: 600; color: #6b7280; display: block; margin-bottom: 4px; }
+    .counsel-notes-wrap textarea {
+      width: 100%; padding: 6px 8px;
+      border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: .78rem; resize: vertical; outline: none;
+      font-family: inherit;
+    }
+    .counsel-notes-wrap textarea:focus { border-color: #3b82f6; }
+
+    /* Modal Footer */
+    .counsel-modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #e5e7eb;
+      display: flex; justify-content: flex-end; gap: 8px;
+      flex-shrink: 0;
+      background: #f9fafb;
+    }
+    .counsel-modal-footer .undo-btn { margin-right: auto; }
+
+    /* Validation error banner */
+    .counsel-error-banner {
+      background: #fef2f2; color: #b91c1c;
+      border: 1px solid #fecaca; border-radius: 6px;
+      padding: 7px 12px; font-size: .78rem; font-weight: 600;
+      margin: 0 20px 8px; flex-shrink: 0;
+    }
+    .counsel-error-banner.hidden { display: none; }
+  </style>
 </head>
 <body style="background:#f1f5f9; min-height:100vh;">
 
@@ -110,68 +317,92 @@
   </main>
 
   <!-- ============================================================
-       COUNSELING PANEL (slide-in from right)
+       COUNSELING MODAL (full popup with procedure picker)
        ============================================================ -->
-  <div id="counsel-panel-backdrop" class="counsel-panel-backdrop hidden"></div>
-  <aside id="counsel-panel" class="counsel-panel hidden">
-    <!-- Panel Header -->
-    <div class="counsel-panel-header">
-      <div>
-        <h2 class="counsel-panel-title">Counseling Session</h2>
-        <div class="counsel-panel-subtitle" id="cp-patient-info">—</div>
-      </div>
-      <button class="btn btn--ghost btn--sm" id="cp-close-btn" title="Close">✕</button>
-    </div>
+  <div id="counsel-modal-overlay" class="counsel-modal-overlay hidden">
+    <div class="counsel-modal" role="dialog" aria-modal="true" aria-labelledby="counsel-modal-title">
 
-    <!-- Patient Summary Bar -->
-    <div class="counsel-patient-summary" id="cp-summary">
-      <div class="counsel-summary-item"><span class="counsel-summary-label">Token</span><strong id="cp-token">—</strong></div>
-      <div class="counsel-summary-item"><span class="counsel-summary-label">Doctor</span><span id="cp-doctor">—</span></div>
-      <div class="counsel-summary-item"><span class="counsel-summary-label">Purpose</span><span id="cp-purpose">—</span></div>
-      <div class="counsel-summary-item"><span class="counsel-summary-label">Status</span><span id="cp-status-badge">—</span></div>
-    </div>
-
-    <!-- Panel Body: Procedures -->
-    <div class="counsel-panel-body">
-
-      <!-- Procedure Search + List -->
-      <div class="counsel-proc-search-wrap">
-        <input type="text" id="proc-search-input" placeholder="🔍 Search procedures..." />
-      </div>
-
-      <div class="counsel-proc-list" id="proc-list">
-        <!-- Checkboxes loaded here -->
-        <div class="text-muted" style="padding:12px;text-align:center;">Loading procedures...</div>
-      </div>
-
-      <!-- Selected Procedures with Prices -->
-      <div id="selected-procs-section" style="margin-top:16px;">
-        <h4 style="font-size:.85rem;font-weight:600;color:var(--gray-700);margin-bottom:8px;">Selected Procedures & Prices</h4>
-        <div id="selected-proc-list">
-          <div class="text-muted" style="font-size:.8rem;">No procedures selected yet.</div>
+      <!-- Modal Header -->
+      <div class="counsel-modal-header">
+        <div>
+          <div class="counsel-modal-title" id="counsel-modal-title">Counseling Session</div>
+          <div class="counsel-modal-subtitle" id="cm-patient-subtitle">—</div>
         </div>
-        <!-- Running Total -->
-        <div class="counsel-total-row" id="counsel-total-row" style="display:none;">
-          <span>Total Quoted Price</span>
-          <strong id="counsel-total-amount">Rs 0</strong>
+        <button class="btn btn--ghost btn--sm" id="cm-close-btn" style="color:#fff;font-size:1.1rem;" title="Close">✕</button>
+      </div>
+
+      <!-- Patient Summary Chips -->
+      <div class="counsel-patient-chips">
+        <span class="counsel-chip chip--token">🏷 Token: <strong id="cm-token">—</strong></span>
+        <span class="counsel-chip chip--doctor">👨‍⚕️ <span id="cm-doctor">—</span></span>
+        <span class="counsel-chip">🪪 MR: <span id="cm-mrn">—</span></span>
+        <span class="counsel-chip">📅 <span id="cm-age">—</span></span>
+        <span class="counsel-chip">📞 <span id="cm-phone">—</span></span>
+        <span class="counsel-chip">📌 <span id="cm-source">—</span></span>
+        <span class="counsel-chip" id="cm-status-chip">—</span>
+      </div>
+
+      <!-- Error Banner -->
+      <div class="counsel-error-banner hidden" id="cm-error-banner"></div>
+
+      <!-- Two-pane body -->
+      <div class="counsel-modal-body">
+
+        <!-- LEFT: Procedure Picker -->
+        <div class="counsel-proc-picker">
+          <div class="counsel-proc-picker-header">📋 Select Procedures (from list or type custom)</div>
+
+          <div class="counsel-proc-search">
+            <input type="text" id="cm-proc-search" placeholder="🔍 Search procedures..." autocomplete="off" />
+          </div>
+
+          <!-- Custom procedure entry -->
+          <div class="counsel-custom-proc-row">
+            <div class="custom-row-inner">
+              <input type="text" id="cm-custom-proc-name" placeholder="Or type a custom procedure name…" autocomplete="off" />
+              <button class="btn btn--outline btn--sm" id="cm-add-custom-btn" title="Add custom procedure">+ Add</button>
+            </div>
+          </div>
+
+          <div class="counsel-proc-scroll" id="cm-proc-scroll">
+            <div class="counsel-empty-msg">Loading procedures…</div>
+          </div>
         </div>
+
+        <!-- RIGHT: Selected + Notes -->
+        <div class="counsel-selected-pane">
+          <div class="counsel-selected-header">
+            💊 Procedures &amp; Prices
+            <span style="color:#9ca3af;font-weight:400;margin-left:4px;">(enter price per procedure)</span>
+          </div>
+          <div class="counsel-selected-scroll" id="cm-selected-scroll">
+            <div class="counsel-empty-msg" id="cm-empty-msg">No procedures added yet. Select from the list or add a custom one.</div>
+          </div>
+
+          <!-- Running total -->
+          <div class="counsel-total-wrap" id="cm-total-wrap" style="display:none;">
+            <span>Total Quoted Price</span>
+            <span id="cm-total-amount">Rs 0</span>
+          </div>
+
+          <!-- Notes -->
+          <div class="counsel-notes-wrap">
+            <label for="cm-notes">Counselor Notes (optional — visible to Admin & Counselor only)</label>
+            <textarea id="cm-notes" rows="3" placeholder="Add any notes about this patient's visit…"></textarea>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Notes -->
-      <div class="form-group" style="margin-top:16px;">
-        <label class="form-label" for="counsel-notes">Counselor Notes (optional)</label>
-        <textarea id="counsel-notes" class="form-input" rows="3" placeholder="Notes visible to Admin and Counselor only..."></textarea>
+      <!-- Modal Footer -->
+      <div class="counsel-modal-footer">
+        <button class="btn btn--secondary undo-btn" id="cm-undo-btn" title="Return patient to Waiting">↩ Undo Check-in</button>
+        <button class="btn btn--outline" id="cm-draft-btn">💾 Save Draft</button>
+        <button class="btn btn--success" id="cm-complete-btn">✅ Procedure Done &amp; Print Token</button>
       </div>
 
     </div>
-
-    <!-- Panel Footer -->
-    <div class="counsel-panel-footer">
-      <button class="btn btn--secondary" id="cp-undo-btn" style="margin-right:auto;" title="Undo check-in (back to Waiting)">↩ Undo</button>
-      <button class="btn btn--outline" id="cp-save-draft-btn">💾 Save Draft</button>
-      <button class="btn btn--success" id="cp-complete-btn">✅ Complete &amp; Print</button>
-    </div>
-  </aside>
+  </div>
 
   <script type="module" src="./js/counseling.js"></script>
 </body>

@@ -14,14 +14,13 @@ if (!user) throw new Error('Unauthorized');
 const $ = id => document.getElementById(id);
 
 // --- State ---
-let _queue = [];          // all counseling sessions for today
-let _procedures = [];     // all active procedures from DB
-let _activeTab = 'waiting';
-let _searchQuery = '';
-let _doctorFilter = '';
-let _activePanelSession = null; // the session being worked on
-let _selectedProcs = [];        // [{procedure_id, procedure_name_snapshot, procedure_category_snapshot, quoted_price, sort_order}]
-let _procSearchQuery = '';
+let _queue          = [];   // all counseling sessions for today
+let _procedures     = [];   // active procedures from DB
+let _activeTab      = 'waiting';
+let _searchQuery    = '';
+let _doctorFilter   = '';
+let _modal          = null; // { session, selectedProcs }
+let _procSearch     = '';
 let _waitTimerHandle = null;
 
 // ==============================================================================
@@ -47,13 +46,13 @@ async function init() {
   // Doctor filter
   await loadDoctorFilter();
 
-  // Load procedures (for the panel)
+  // Load procedures (for the modal)
   _procedures = await api.getActiveProcedures();
 
   // Load initial queue
   await refreshQueue();
 
-  // Wire up tab buttons
+  // Wire tabs
   document.querySelectorAll('.counsel-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       _activeTab = btn.dataset.tab;
@@ -83,22 +82,11 @@ async function init() {
     renderTable();
   });
 
-  // Panel
-  $('cp-close-btn').addEventListener('click', closePanel);
-  $('counsel-panel-backdrop').addEventListener('click', closePanel);
-  $('cp-save-draft-btn').addEventListener('click', () => saveCounseling(false));
-  $('cp-complete-btn').addEventListener('click', () => saveCounseling(true));
-  $('cp-undo-btn').addEventListener('click', undoCounselingCheckin);
-
-  // Procedure search in panel
-  const doProcSearch = debounce(() => {
-    _procSearchQuery = $('proc-search-input').value.trim().toLowerCase();
-    renderProcedureList();
-  }, 200);
-  $('proc-search-input').addEventListener('input', doProcSearch);
-
   // Event delegation for table actions
   $('counseling-tbody').addEventListener('click', handleTableClick);
+
+  // Modal wire-up
+  wireModal();
 
   // Realtime
   startRealtime(onRealtimeEvent);
@@ -160,9 +148,9 @@ function renderStatCards() {
   $('stat-active').textContent  = active;
   $('stat-done').textContent    = done;
   $('stat-total').textContent   = _queue.length;
-  $('tab-badge-waiting').textContent     = waiting;
+  $('tab-badge-waiting').textContent       = waiting;
   $('tab-badge-in_counseling').textContent = active;
-  $('tab-badge-done').textContent        = done;
+  $('tab-badge-done').textContent          = done;
 }
 
 // ==============================================================================
@@ -183,7 +171,7 @@ function getFilteredQueue() {
 }
 
 function renderTable() {
-  const rows = getFilteredQueue();
+  const rows  = getFilteredQueue();
   const tbody = $('counseling-tbody');
 
   if (rows.length === 0) {
@@ -197,27 +185,26 @@ function renderTable() {
 }
 
 function buildRow(s) {
-  const name = [s.first_name, s.last_name].filter(Boolean).join(' ') || '—';
-  const phone = s.full_phone || '—';
-  const mrn   = s.patient_mrn || '—';
-  const age   = s.age ? `${s.age}y` : '';
+  const name        = [s.first_name, s.last_name].filter(Boolean).join(' ') || '—';
+  const phone       = s.full_phone || '—';
+  const mrn         = s.patient_mrn || '—';
+  const age         = s.age ? `${s.age}y` : '';
   const checkinTime = s.check_in_time ? formatTimestamp(s.check_in_time, 'time') : '—';
-  const waitSince = s.check_in_time || s.created_at;
+  const waitSince   = s.check_in_time || s.created_at;
 
   let actionBtn = '';
   if (s.counseling_status === 'waiting') {
-    actionBtn = `<button class="btn btn--primary btn--sm" data-action="start" data-session-id="${s.session_id}" data-booking-id="${s.booking_id}">
+    actionBtn = `<button class="btn btn--primary btn--sm" data-action="start" data-booking-id="${s.booking_id}" data-session-id="${s.session_id}">
       💬 Start Counseling
     </button>`;
   } else if (s.counseling_status === 'in_counseling') {
-    actionBtn = `<button class="btn btn--warning btn--sm" data-action="open" data-session-id="${s.session_id}" data-booking-id="${s.booking_id}">
+    actionBtn = `<button class="btn btn--warning btn--sm" data-action="open" data-booking-id="${s.booking_id}" data-session-id="${s.session_id}">
       📝 Continue
     </button>`;
   } else {
-    actionBtn = `<button class="btn btn--ghost btn--sm" data-action="open" data-session-id="${s.session_id}" data-booking-id="${s.booking_id}">
-      👁 View
-    </button>
-    <button class="btn btn--ghost btn--sm" data-action="reprint" data-session-id="${s.session_id}" data-booking-id="${s.booking_id}" title="Reprint Slip">🖨️</button>`;
+    actionBtn = `
+      <button class="btn btn--ghost btn--sm" data-action="open" data-booking-id="${s.booking_id}" data-session-id="${s.session_id}">👁 View</button>
+      <button class="btn btn--ghost btn--sm" data-action="reprint" data-booking-id="${s.booking_id}" data-session-id="${s.session_id}" title="Reprint Slip">🖨️</button>`;
   }
 
   return `<tr data-session-id="${s.session_id}" data-booking-id="${s.booking_id}">
@@ -229,8 +216,8 @@ function buildRow(s) {
     </td>
     <td class="text-sm">${s.doctor_name || '—'}</td>
     <td>
-      <span class="status-pill" style="background:#EDE9FE;color:#5B21B6;">${s.source || '—'}</span>
-      <span class="status-pill" style="background:#D1FAE5;color:#065F46;margin-top:2px;">${s.purpose || '—'}</span>
+      <span class="status-pill" style="background:#EDE9FE;color:#5B21B6;">${escHtml(s.source || '—')}</span>
+      <span class="status-pill" style="background:#D1FAE5;color:#065F46;margin-top:2px;">${escHtml(s.purpose || '—')}</span>
     </td>
     <td class="text-sm">${checkinTime}</td>
     <td class="text-sm"><span data-wait-since="${waitSince}">${formatWaitTime(waitSince)}</span></td>
@@ -244,129 +231,191 @@ function buildRow(s) {
 async function handleTableClick(e) {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
-  const action = btn.dataset.action;
+  const action    = btn.dataset.action;
   const bookingId = btn.dataset.bookingId;
   const sessionId = btn.dataset.sessionId;
-  const session = _queue.find(s => s.session_id === sessionId);
+  const session   = _queue.find(s => s.session_id === sessionId);
 
   if (action === 'start') {
     await startCounseling(bookingId, session);
   } else if (action === 'open') {
-    await openPanel(session);
+    await openModal(session);
   } else if (action === 'reprint') {
     reprintSlip(sessionId, bookingId);
   }
 }
 
 // ==============================================================================
-// START COUNSELING
+// START COUNSELING — calls RPC, then opens modal
 // ==============================================================================
 async function startCounseling(bookingId, session) {
   try {
     const result = await api.counselingCheckin(bookingId);
     if (!result.success) { showToast(result.error || 'Failed to start counseling.', 'error'); return; }
-    // Update local queue
+    // Update local queue immediately
     const idx = _queue.findIndex(s => s.booking_id === bookingId);
     if (idx !== -1) _queue[idx].counseling_status = 'in_counseling';
     renderStatCards();
     renderTable();
-    // Open panel
-    await openPanel({ ...session, counseling_status: 'in_counseling', session_id: result.session?.id || session?.session_id });
+    // Open modal with updated session object
+    const updated = { ...session, counseling_status: 'in_counseling', session_id: result.session?.id || session?.session_id };
+    await openModal(updated);
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
   }
 }
 
 // ==============================================================================
-// PANEL OPEN / CLOSE
+// MODAL WIRE-UP
 // ==============================================================================
-async function openPanel(session) {
-  _activePanelSession = session;
-  _selectedProcs = [];
+function wireModal() {
+  $('cm-close-btn').addEventListener('click', closeModal);
+  // Close on overlay click outside the modal
+  $('counsel-modal-overlay').addEventListener('click', e => {
+    if (e.target === $('counsel-modal-overlay')) closeModal();
+  });
+  $('cm-draft-btn').addEventListener('click', () => saveCounseling(false));
+  $('cm-complete-btn').addEventListener('click', () => saveCounseling(true));
+  $('cm-undo-btn').addEventListener('click', undoCounselingCheckin);
 
-  // Populate header info
+  // Procedure search
+  const doProcSearch = debounce(() => {
+    _procSearch = $('cm-proc-search').value.trim().toLowerCase();
+    renderProcPicker();
+  }, 200);
+  $('cm-proc-search').addEventListener('input', doProcSearch);
+
+  // Custom procedure add
+  $('cm-add-custom-btn').addEventListener('click', addCustomProcedure);
+  $('cm-custom-proc-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addCustomProcedure(); }
+  });
+
+  // Event delegation for selected procedure price/remove
+  $('cm-selected-scroll').addEventListener('input', e => {
+    const inp = e.target.closest('.proc-price-input');
+    if (!inp || !_modal) return;
+    const idx = parseInt(inp.dataset.idx);
+    const val = parseFloat(inp.value);
+    if (isNaN(val) || val < 0) {
+      inp.classList.add('error');
+    } else {
+      inp.classList.remove('error');
+      _modal.selectedProcs[idx].quoted_price = parseFloat(val.toFixed(2));
+      updateTotal();
+    }
+  });
+  $('cm-selected-scroll').addEventListener('blur', e => {
+    const inp = e.target.closest('.proc-price-input');
+    if (!inp || !_modal) return;
+    const val = parseFloat(inp.value);
+    if (isNaN(val) || val < 0) {
+      inp.value = '0.00';
+      const idx = parseInt(inp.dataset.idx);
+      _modal.selectedProcs[idx].quoted_price = 0;
+      inp.classList.remove('error');
+      updateTotal();
+    }
+  }, true);
+  $('cm-selected-scroll').addEventListener('click', e => {
+    const btn = e.target.closest('.proc-remove-btn');
+    if (!btn || !_modal) return;
+    const idx     = parseInt(btn.dataset.idx);
+    const removed = _modal.selectedProcs.splice(idx, 1)[0];
+    // Uncheck in picker if it was from DB
+    if (removed.procedure_id) {
+      const cb = $('cm-proc-scroll')?.querySelector(`[data-proc-id="${removed.procedure_id}"]`);
+      if (cb) { cb.checked = false; cb.closest('label')?.classList.remove('checked'); }
+    }
+    _modal.selectedProcs.forEach((p, i) => p.sort_order = i);
+    renderSelectedProcs();
+  });
+}
+
+// ==============================================================================
+// OPEN MODAL
+// ==============================================================================
+async function openModal(session) {
+  _modal = { session, selectedProcs: [] };
+
+  // --- Fill header ---
   const name = [session.first_name, session.last_name].filter(Boolean).join(' ') || '—';
-  $('cp-patient-info').textContent = `${name} · MR: ${session.patient_mrn || '—'} · ${session.full_phone || '—'}`;
-  $('cp-token').textContent   = session.token_number ?? '—';
-  $('cp-doctor').textContent  = session.doctor_name || '—';
-  $('cp-purpose').textContent = session.purpose || '—';
-  renderStatusBadge($('cp-status-badge'), session.counseling_status);
+  $('counsel-modal-title').textContent   = 'Counseling Session';
+  $('cm-patient-subtitle').textContent   = name;
+  $('cm-token').textContent   = session.token_number ?? '—';
+  $('cm-doctor').textContent  = session.doctor_name   || '—';
+  $('cm-mrn').textContent     = session.patient_mrn   || '—';
+  $('cm-age').textContent     = session.age ? session.age + ' yrs' : '—';
+  $('cm-phone').textContent   = session.full_phone     || '—';
+  $('cm-source').textContent  = session.source         || '—';
+  renderStatusChip($('cm-status-chip'), session.counseling_status);
 
-  // Undo visible only for in_counseling + (counselor or admin)
-  $('cp-undo-btn').style.display = session.counseling_status === 'in_counseling' ? '' : 'none';
-  // Complete button only if not done
-  $('cp-complete-btn').disabled = session.counseling_status === 'done';
-  $('cp-save-draft-btn').disabled = session.counseling_status === 'done';
+  // Undo only for in_counseling
+  $('cm-undo-btn').style.display   = session.counseling_status === 'in_counseling' ? '' : 'none';
+  $('cm-complete-btn').disabled    = session.counseling_status === 'done';
+  $('cm-draft-btn').disabled       = session.counseling_status === 'done';
 
-  // Load existing session detail (procedures + notes)
+  hideError();
+
+  // --- Load saved draft (procedures + notes) ---
   if (session.session_id) {
     try {
       const detail = await api.getCounselingSessionDetail(session.session_id);
       if (detail.success) {
-        _selectedProcs = (detail.procedures || []).map(p => ({
-          procedure_id: p.procedure_id,
+        _modal.selectedProcs = (detail.procedures || []).map((p, i) => ({
+          procedure_id: p.procedure_id || null,
           procedure_name_snapshot: p.procedure_name_snapshot,
-          procedure_category_snapshot: p.procedure_category_snapshot,
+          procedure_category_snapshot: p.procedure_category_snapshot || null,
           quoted_price: parseFloat(p.quoted_price) || 0,
-          sort_order: p.sort_order || 0,
+          sort_order: p.sort_order ?? i,
         }));
-        $('counsel-notes').value = detail.session?.notes || '';
+        $('cm-notes').value = detail.session?.notes || '';
       }
     } catch (err) {
       console.warn('Could not load session detail:', err);
     }
+  } else {
+    $('cm-notes').value = '';
   }
 
-  // Render procedure list and selected list
-  renderProcedureList();
+  // Reset search
+  $('cm-proc-search').value  = '';
+  $('cm-custom-proc-name').value = '';
+  _procSearch = '';
+
+  renderProcPicker();
   renderSelectedProcs();
 
-  // Show panel
-  $('counsel-panel').classList.remove('hidden');
-  $('counsel-panel-backdrop').classList.remove('hidden');
+  $('counsel-modal-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
 }
 
-function closePanel() {
-  $('counsel-panel').classList.add('hidden');
-  $('counsel-panel-backdrop').classList.add('hidden');
-  _activePanelSession = null;
-  _selectedProcs = [];
-  $('proc-search-input').value = '';
-  _procSearchQuery = '';
-  $('counsel-notes').value = '';
-}
-
-function renderStatusBadge(el, status) {
-  const map = {
-    waiting:      { label: '⏳ Waiting',       bg: '#FEF3C7', color: '#92400E' },
-    in_counseling:{ label: '💬 In Counseling', bg: '#DBEAFE', color: '#1D4ED8' },
-    done:         { label: '✅ Done',           bg: '#D1FAE5', color: '#065F46' },
-  };
-  const s = map[status] || { label: status, bg: '#F3F4F6', color: '#374151' };
-  el.textContent = s.label;
-  el.style.background = s.bg;
-  el.style.color = s.color;
-  el.style.padding = '2px 10px';
-  el.style.borderRadius = '99px';
-  el.style.fontWeight = '600';
-  el.style.fontSize = '.75rem';
+function closeModal() {
+  $('counsel-modal-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+  _modal = null;
+  $('cm-notes').value = '';
+  $('cm-proc-search').value = '';
+  $('cm-custom-proc-name').value = '';
+  _procSearch = '';
+  hideError();
 }
 
 // ==============================================================================
-// PROCEDURE LIST IN PANEL
+// PROCEDURE PICKER (left pane)
 // ==============================================================================
-function renderProcedureList() {
-  const container = $('proc-list');
-  const selectedIds = new Set(_selectedProcs.map(p => p.procedure_id).filter(Boolean));
+function renderProcPicker() {
+  if (!_modal) return;
+  const container   = $('cm-proc-scroll');
+  const selectedIds = new Set(_modal.selectedProcs.map(p => p.procedure_id).filter(Boolean));
 
-  // Group by category
   const filtered = _procedures.filter(p => {
-    if (!_procSearchQuery) return true;
-    return (p.name + ' ' + (p.category || '')).toLowerCase().includes(_procSearchQuery);
+    if (!_procSearch) return true;
+    return (p.name + ' ' + (p.category || '')).toLowerCase().includes(_procSearch);
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="text-muted" style="padding:12px;text-align:center;">No procedures found.</div>';
+    container.innerHTML = '<div class="counsel-empty-msg">No procedures match your search.</div>';
     return;
   }
 
@@ -374,11 +423,11 @@ function renderProcedureList() {
   container.innerHTML = categories.map(cat => {
     const procs = filtered.filter(p => (p.category || 'Other') === cat);
     return `<div class="proc-category-group">
-      <div class="proc-category-label">${cat}</div>
+      <div class="proc-category-label">${escHtml(cat)}</div>
       ${procs.map(p => `
         <label class="proc-checkbox-row ${selectedIds.has(p.id) ? 'checked' : ''}">
           <input type="checkbox" class="proc-checkbox" data-proc-id="${p.id}"
-            data-proc-name="${escHtml(p.name)}" data-proc-cat="${escHtml(p.category || '')}"
+            data-proc-name="${escAttr(p.name)}" data-proc-cat="${escAttr(p.category || '')}"
             ${selectedIds.has(p.id) ? 'checked' : ''} />
           <span class="proc-name">${escHtml(p.name)}</span>
         </label>
@@ -393,148 +442,191 @@ function renderProcedureList() {
 }
 
 function onProcCheckboxChange(e) {
-  const cb = e.target;
+  if (!_modal) return;
+  const cb       = e.target;
   const procId   = cb.dataset.procId;
   const procName = cb.dataset.procName;
   const procCat  = cb.dataset.procCat;
 
   if (cb.checked) {
-    // Add to selected with price=0
-    if (!_selectedProcs.find(p => p.procedure_id === procId)) {
-      _selectedProcs.push({
+    if (!_modal.selectedProcs.find(p => p.procedure_id === procId)) {
+      _modal.selectedProcs.push({
         procedure_id: procId,
         procedure_name_snapshot: procName,
         procedure_category_snapshot: procCat,
         quoted_price: 0,
-        sort_order: _selectedProcs.length,
+        sort_order: _modal.selectedProcs.length,
       });
     }
     cb.closest('label')?.classList.add('checked');
   } else {
-    _selectedProcs = _selectedProcs.filter(p => p.procedure_id !== procId);
+    _modal.selectedProcs = _modal.selectedProcs.filter(p => p.procedure_id !== procId);
+    _modal.selectedProcs.forEach((p, i) => p.sort_order = i);
     cb.closest('label')?.classList.remove('checked');
   }
   renderSelectedProcs();
 }
 
 // ==============================================================================
-// SELECTED PROCEDURES WITH PRICE INPUTS
+// CUSTOM PROCEDURE ADD
+// ==============================================================================
+function addCustomProcedure() {
+  if (!_modal) return;
+  const input = $('cm-custom-proc-name');
+  const name  = input.value.trim();
+  if (!name) { input.focus(); return; }
+  // Avoid duplicate custom names (case-insensitive)
+  const dup = _modal.selectedProcs.find(p => p.procedure_name_snapshot.toLowerCase() === name.toLowerCase());
+  if (dup) {
+    showError('This procedure is already in the list.');
+    return;
+  }
+  _modal.selectedProcs.push({
+    procedure_id: null, // custom = no DB id
+    procedure_name_snapshot: name,
+    procedure_category_snapshot: 'Custom',
+    quoted_price: 0,
+    sort_order: _modal.selectedProcs.length,
+  });
+  input.value = '';
+  hideError();
+  renderSelectedProcs();
+  // Scroll selected pane to bottom
+  const scroll = $('cm-selected-scroll');
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+// ==============================================================================
+// SELECTED PROCEDURES (right pane)
 // ==============================================================================
 function renderSelectedProcs() {
-  const container = $('selected-proc-list');
-  const totalRow  = $('counsel-total-row');
+  if (!_modal) return;
+  const scroll   = $('cm-selected-scroll');
+  const emptyMsg = $('cm-empty-msg');
+  const totalWrap= $('cm-total-wrap');
 
-  if (_selectedProcs.length === 0) {
-    container.innerHTML = '<div class="text-muted" style="font-size:.8rem;">No procedures selected yet.</div>';
-    totalRow.style.display = 'none';
+  if (_modal.selectedProcs.length === 0) {
+    // Keep empty msg visible inside the scroll, nothing else
+    scroll.innerHTML = '<div class="counsel-empty-msg" id="cm-empty-msg">No procedures added yet. Select from the list or add a custom one.</div>';
+    totalWrap.style.display = 'none';
     return;
   }
 
-  container.innerHTML = _selectedProcs.map((p, i) => `
+  scroll.innerHTML = _modal.selectedProcs.map((p, i) => `
     <div class="selected-proc-row" data-idx="${i}">
-      <span class="selected-proc-name">${escHtml(p.procedure_name_snapshot)}</span>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <span style="color:var(--gray-500);font-size:.8rem;">Rs</span>
-        <input type="number" class="proc-price-input" data-idx="${i}"
-          value="${p.quoted_price}" min="0" step="1"
-          placeholder="0" style="width:90px;" />
-        <button class="btn btn--ghost btn--sm proc-remove-btn" data-idx="${i}" title="Remove">✕</button>
+      <span class="selected-proc-name">${escHtml(p.procedure_name_snapshot)}
+        ${p.procedure_category_snapshot ? `<span style="display:block;font-size:.68rem;color:#9ca3af;">${escHtml(p.procedure_category_snapshot)}</span>` : ''}
+      </span>
+      <div class="proc-price-wrap">
+        <span>Rs</span>
+        <input type="number" class="proc-price-input"
+          data-idx="${i}" value="${p.quoted_price.toFixed(2)}"
+          min="0" step="1" placeholder="0" />
+        <button class="proc-remove-btn" data-idx="${i}" title="Remove">✕</button>
       </div>
     </div>
   `).join('');
 
-  // Price inputs
-  container.querySelectorAll('.proc-price-input').forEach(input => {
-    input.addEventListener('input', e => {
-      const idx = parseInt(e.target.dataset.idx);
-      const val = parseFloat(e.target.value);
-      if (isNaN(val) || val < 0) {
-        e.target.style.borderColor = 'var(--red)';
-      } else {
-        e.target.style.borderColor = '';
-        _selectedProcs[idx].quoted_price = val;
-        updateTotal();
-      }
-    });
-    input.addEventListener('blur', e => {
-      const val = parseFloat(e.target.value);
-      if (isNaN(val) || val < 0) {
-        e.target.value = 0;
-        const idx = parseInt(e.target.dataset.idx);
-        _selectedProcs[idx].quoted_price = 0;
-        e.target.style.borderColor = '';
-        updateTotal();
-      }
-    });
-  });
-
-  // Remove buttons
-  container.querySelectorAll('.proc-remove-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const idx = parseInt(btn.dataset.idx);
-      const removed = _selectedProcs.splice(idx, 1)[0];
-      // Uncheck in procedure list
-      if (removed.procedure_id) {
-        const cb = $('proc-list')?.querySelector(`[data-proc-id="${removed.procedure_id}"]`);
-        if (cb) { cb.checked = false; cb.closest('label')?.classList.remove('checked'); }
-      }
-      renderSelectedProcs();
-    });
-  });
-
-  totalRow.style.display = '';
+  totalWrap.style.display = '';
   updateTotal();
 }
 
 function updateTotal() {
-  const total = _selectedProcs.reduce((sum, p) => sum + (parseFloat(p.quoted_price) || 0), 0);
-  $('counsel-total-amount').textContent = `Rs ${total.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  if (!_modal) return;
+  const total = _modal.selectedProcs.reduce((sum, p) => sum + (parseFloat(p.quoted_price) || 0), 0);
+  $('cm-total-amount').textContent = `Rs ${total.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// ==============================================================================
+// STATUS CHIP
+// ==============================================================================
+function renderStatusChip(el, status) {
+  const map = {
+    waiting:      { label: '⏳ Waiting',       bg: '#fef3c7', color: '#92400e' },
+    in_counseling:{ label: '💬 In Counseling', bg: '#dbeafe', color: '#1d4ed8' },
+    done:         { label: '✅ Done',           bg: '#d1fae5', color: '#065f46' },
+  };
+  const s = map[status] || { label: status, bg: '#f3f4f6', color: '#374151' };
+  el.textContent          = s.label;
+  el.style.background     = s.bg;
+  el.style.color          = s.color;
+  el.style.fontWeight     = '700';
+}
+
+// ==============================================================================
+// ERROR BANNER
+// ==============================================================================
+function showError(msg) {
+  const el = $('cm-error-banner');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function hideError() {
+  $('cm-error-banner').classList.add('hidden');
+  $('cm-error-banner').textContent = '';
 }
 
 // ==============================================================================
 // SAVE COUNSELING (Draft or Complete)
 // ==============================================================================
 async function saveCounseling(complete) {
-  if (!_activePanelSession) return;
+  if (!_modal) return;
+  hideError();
 
-  // Validate prices
-  const hasNegative = _selectedProcs.some(p => p.quoted_price < 0);
-  if (hasNegative) { showToast('Prices cannot be negative.', 'error'); return; }
+  // --- Validation ---
+  if (complete) {
+    if (_modal.selectedProcs.length === 0) {
+      showError('Please add at least one procedure before completing.');
+      return;
+    }
+    const missingPrice = _modal.selectedProcs.find(p => {
+      const v = parseFloat(p.quoted_price);
+      return isNaN(v) || v < 0;
+    });
+    if (missingPrice) {
+      showError(`Enter a valid price (≥ 0) for: "${missingPrice.procedure_name_snapshot}"`);
+      return;
+    }
+    const hasNegative = _modal.selectedProcs.some(p => parseFloat(p.quoted_price) < 0);
+    if (hasNegative) {
+      showError('Prices cannot be negative.');
+      return;
+    }
+  }
 
   if (complete) {
-    const ok = await confirmDialog(
-      `Complete counseling for this patient? This will trigger the procedure slip print.`
-    );
+    const ok = await confirmDialog('Mark this patient as Procedure Done and print the token slip?');
     if (!ok) return;
   }
 
-  const notes = $('counsel-notes').value.trim();
+  const notes   = $('cm-notes').value.trim();
+  const session = _modal.session;
+
+  // Freeze ref before async call (modal may close)
+  const frozenBookingId  = session.booking_id;
+  const frozenSessionId  = session.session_id;
 
   try {
-    const result = await api.saveCounseling(
-      _activePanelSession.booking_id,
-      _selectedProcs,
-      notes,
-      complete
-    );
-    if (!result.success) { showToast(result.error || 'Failed to save.', 'error'); return; }
+    const result = await api.saveCounseling(frozenBookingId, _modal.selectedProcs, notes, complete);
+    if (!result.success) { showError(result.error || 'Failed to save.'); return; }
 
-    showToast(complete ? 'Counseling completed!' : 'Draft saved.', 'success');
+    showToast(complete ? 'Counseling completed & slip printing…' : 'Draft saved.', 'success');
 
     if (complete) {
       // Update local queue
-      const idx = _queue.findIndex(s => s.booking_id === _activePanelSession.booking_id);
+      const idx = _queue.findIndex(s => s.booking_id === frozenBookingId);
       if (idx !== -1) _queue[idx].counseling_status = 'done';
       renderStatCards();
-      closePanel();
-      // Auto print slip
-      openPrintSlip(_activePanelSession.session_id, _activePanelSession.booking_id);
+      renderTable();
+      closeModal();
+      // Open print slip
+      openPrintSlip(frozenSessionId, frozenBookingId);
     } else {
-      // Update panel status badge
-      renderStatusBadge($('cp-status-badge'), _activePanelSession.counseling_status);
+      showToast('Draft saved — panel stays open.', 'info');
     }
   } catch (err) {
-    showToast('Error: ' + err.message, 'error');
+    showError('Error: ' + err.message);
   }
 }
 
@@ -542,16 +634,17 @@ async function saveCounseling(complete) {
 // UNDO COUNSELING CHECKIN
 // ==============================================================================
 async function undoCounselingCheckin() {
-  if (!_activePanelSession) return;
+  if (!_modal) return;
   const ok = await confirmDialog('Return patient to Waiting status? The counseling session will reset.');
   if (!ok) return;
+  const bookingId = _modal.session.booking_id;
   try {
-    const result = await api.undoCounselingCheckin(_activePanelSession.booking_id);
+    const result = await api.undoCounselingCheckin(bookingId);
     if (!result.success) { showToast(result.error || 'Failed to undo.', 'error'); return; }
-    const idx = _queue.findIndex(s => s.booking_id === _activePanelSession.booking_id);
+    const idx = _queue.findIndex(s => s.booking_id === bookingId);
     if (idx !== -1) _queue[idx].counseling_status = 'waiting';
     renderStatCards();
-    closePanel();
+    closeModal();
     renderTable();
     showToast('Patient returned to Waiting.', 'info');
   } catch (err) {
@@ -564,12 +657,12 @@ async function undoCounselingCheckin() {
 // ==============================================================================
 function openPrintSlip(sessionId, bookingId) {
   const url = `./print-slip.html?session_id=${encodeURIComponent(sessionId)}&booking_id=${encodeURIComponent(bookingId)}`;
-  window.open(url, '_blank', 'width=500,height=700');
+  window.open(url, '_blank', 'width=560,height=750');
 }
 
 function reprintSlip(sessionId, bookingId) {
   const url = `./print-slip.html?session_id=${encodeURIComponent(sessionId)}&booking_id=${encodeURIComponent(bookingId)}&reprint=1`;
-  window.open(url, '_blank', 'width=500,height=700');
+  window.open(url, '_blank', 'width=560,height=750');
 }
 
 // ==============================================================================
@@ -578,7 +671,7 @@ function reprintSlip(sessionId, bookingId) {
 function onRealtimeEvent(evt) {
   const { event, record, table } = evt;
 
-  // New patient arrived via checkout from reception or new counseling session
+  // New patient checked out at reception → arrives in Counseling Waiting
   if (
     (event === 'INSERT' && table === 'counseling_sessions') ||
     (event === 'booking_updated' && record?.status === 'checked_out') ||
@@ -608,6 +701,9 @@ function onRealtimeEvent(evt) {
 // ==============================================================================
 function escHtml(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(str) {
+  return String(str ?? '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ==============================================================================

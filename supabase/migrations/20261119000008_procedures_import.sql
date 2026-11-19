@@ -108,7 +108,7 @@ BEGIN
     UPDATE public.procedures
     SET name       = trim(p_name),
         category   = p_category,
-        active     = p_active,
+        is_active  = p_active,
         sort_order = p_sort_order,
         updated_at = now()
     WHERE id = p_id AND deleted_at IS NULL
@@ -119,9 +119,9 @@ BEGIN
     END IF;
   ELSE
     -- INSERT
-    INSERT INTO public.procedures (name, category, active, sort_order)
+    INSERT INTO public.procedures (name, category, is_active, sort_order)
     VALUES (trim(p_name), p_category, p_active, p_sort_order)
-    ON CONFLICT (lower(name)) WHERE deleted_at IS NULL DO UPDATE
+    ON CONFLICT (lower(name)) DO UPDATE
       SET updated_at = now()
     RETURNING * INTO v_proc;
   END IF;
